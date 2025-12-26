@@ -5,9 +5,18 @@ import { InfrastructureException } from '../utils/errors';
 
 /**
  * Supabase client instance
+ * Cache cleared on each initialization to avoid stale schema cache issues
  */
 let supabaseClient: SupabaseClient | null = null;
 let supabaseServiceClient: SupabaseClient | null = null;
+
+/**
+ * Clear Supabase client cache (useful for development)
+ */
+export function clearSupabaseClients(): void {
+  supabaseClient = null;
+  supabaseServiceClient = null;
+}
 
 /**
  * Initialize Supabase client (anon key - for public operations)
@@ -45,6 +54,15 @@ export function getSupabaseServiceClient(): SupabaseClient {
       {
         auth: {
           persistSession: false,
+          autoRefreshToken: false,
+        },
+        db: {
+          schema: 'public',
+        },
+        global: {
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+          },
         },
       }
     );

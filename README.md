@@ -51,9 +51,9 @@ travelci-backend/
 ## Prerequisites
 
 - Node.js 18+ installed
-- Supabase account and project
-- Cloudinary account
-- Redis server (optional, but recommended)
+- Supabase CLI installed (`npm install -g supabase` or see [installation guide](https://supabase.com/docs/guides/cli/getting-started))
+- Docker (required for local Supabase development)
+- Redis server (optional, but recommended for caching)
 
 ## Installation
 
@@ -64,49 +64,96 @@ travelci-backend/
 npm install
 ```
 
-3. **Set up environment variables**:
-   - Copy `.env.example` to `.env`
-   - Fill in all required values:
+3. **Set up Supabase locally** (recommended for development):
+   ```bash
+   # Start Supabase locally (requires Docker)
+   npm run supabase:start
+   
+   # Check status and get connection details
+   npm run supabase:status
+   ```
+   
+   This will automatically:
+   - Create a local PostgreSQL database
+   - Run all migrations (including the storage bucket creation)
+   - Start Supabase Studio at http://localhost:54323
+   - Provide local API URL at http://127.0.0.1:54321
 
-```env
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+4. **Set up environment variables**:
+   
+   **For local development** (with Supabase local):
+   - The app will use local Supabase defaults if `SUPABASE_URL` is not set
+   - Only `JWT_SECRET` is required:
+   
+   ```env
+   # JWT Configuration
+   JWT_SECRET=your-jwt-secret-key-change-in-production
+   JWT_EXPIRES_IN=7d
+   
+   # Server Configuration
+   PORT=3000
+   NODE_ENV=development
+   
+   # CORS Configuration
+   CORS_ORIGIN=http://localhost:3000
+   
+   # Redis (Optional)
+   REDIS_URL=redis://localhost:6379
+   ```
+   
+   **For production** (with Supabase cloud):
+   ```env
+   # Supabase Production
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   
+   # JWT Configuration
+   JWT_SECRET=your-strong-jwt-secret-key
+   JWT_EXPIRES_IN=7d
+   
+   # Server Configuration
+   PORT=3000
+   NODE_ENV=production
+   
+   # CORS Configuration
+   CORS_ORIGIN=https://your-domain.com
+   ```
 
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# JWT
-JWT_SECRET=your-jwt-secret-key-change-in-production
-JWT_EXPIRES_IN=7d
-
-# Server
-PORT=3000
-NODE_ENV=development
-
-# CORS
-CORS_ORIGIN=http://localhost:3000
-```
-
-4. **Set up Supabase database**:
-   - Run the migrations in order:
-     ```sql
-     -- Run 001_initial_schema.sql
-     -- Run 002_add_indexes.sql
-     -- Run 003_rls_policies.sql (optional)
-     ```
-   - You can run these in the Supabase SQL editor or use the Supabase CLI
-
-5. **Start Redis** (if using local Redis):
+5. **Start Redis** (optional, for caching):
 ```bash
 redis-server
 ```
+
+## Supabase Local Development
+
+The project includes Supabase CLI configuration for local development:
+
+```bash
+# Start Supabase locally
+npm run supabase:start
+
+# Stop Supabase
+npm run supabase:stop
+
+# Reset database (run migrations and seed)
+npm run supabase:reset
+
+# Check status
+npm run supabase:status
+
+# View logs
+npm run supabase:logs
+```
+
+**Storage Bucket**: After starting Supabase locally, create the storage bucket:
+```bash
+npm run supabase:setup-bucket
+```
+
+For production, run the migration `004_create_storage_bucket.sql` in your Supabase SQL editor, or ensure the bucket exists manually.
+
+**Note**: The bucket migration is included in migrations but may be skipped during startup. Use the setup script above to create it manually after first startup.
 
 ## Running the Application
 

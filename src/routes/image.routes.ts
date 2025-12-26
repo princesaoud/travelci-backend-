@@ -11,8 +11,57 @@ import { Request, Response, NextFunction } from 'express';
 const router = Router();
 
 /**
- * POST /api/images/upload
- * Upload and optimize image (protected)
+ * @swagger
+ * /api/images/upload:
+ *   post:
+ *     summary: Télécharger et optimiser une image
+ *     description: Télécharge une image et génère des versions optimisées (thumbnail, medium, large)
+ *     tags: [Images]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - image
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Fichier image à télécharger
+ *               propertyId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID de la propriété (optionnel)
+ *     responses:
+ *       200:
+ *         description: Image téléchargée et optimisée avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         thumbnail:
+ *                           type: string
+ *                           format: uri
+ *                         medium:
+ *                           type: string
+ *                           format: uri
+ *                         large:
+ *                           type: string
+ *                           format: uri
+ *       400:
+ *         description: Aucun fichier fourni ou erreur de validation
+ *       401:
+ *         description: Non authentifié
  */
 router.post('/upload', authenticate, upload.single('image'), async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -32,8 +81,58 @@ router.post('/upload', authenticate, upload.single('image'), async (req: Request
 });
 
 /**
- * GET /api/images/optimize
- * Get optimized image URL (public)
+ * @swagger
+ * /api/images/optimize:
+ *   get:
+ *     summary: Obtenir une URL d'image optimisée
+ *     description: Génère une URL d'image optimisée avec les paramètres spécifiés (public)
+ *     tags: [Images]
+ *     parameters:
+ *       - in: query
+ *         name: url
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uri
+ *         description: URL de l'image source
+ *       - in: query
+ *         name: width
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Largeur souhaitée en pixels
+ *       - in: query
+ *         name: height
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Hauteur souhaitée en pixels
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [webp, jpg, png, auto]
+ *           default: auto
+ *         description: Format d'image souhaité
+ *     responses:
+ *       200:
+ *         description: URL optimisée générée avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         url:
+ *                           type: string
+ *                           format: uri
+ *                           description: URL de l'image optimisée
+ *       400:
+ *         description: Erreur de validation
  */
 router.get(
   '/optimize',

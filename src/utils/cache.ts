@@ -28,8 +28,16 @@ export function initRedis(): Redis {
       logger.info('Redis connected successfully');
     });
 
+    // Track last error log time to avoid spamming logs
+    let lastErrorLogTime = 0;
+    const ERROR_LOG_INTERVAL = 60000; // Log error at most once per minute
+
     redisClient.on('error', (error) => {
-      logger.error('Redis connection error', { error: error.message });
+      const now = Date.now();
+      if (now - lastErrorLogTime > ERROR_LOG_INTERVAL) {
+        logger.warn('Redis connection error (cache disabled)', { error: error.message });
+        lastErrorLogTime = now;
+      }
     });
 
     return redisClient;

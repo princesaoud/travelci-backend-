@@ -10,7 +10,7 @@ export const errorHandler = (
   error: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   // Log error
   logError(error, {
@@ -40,7 +40,7 @@ export const errorHandler = (
 export const notFoundHandler = (
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   sendError(res, `Route non trouvée: ${req.originalUrl}`, 'NOT_FOUND', 404);
 };
@@ -70,7 +70,8 @@ export const timingMiddleware = (
 
   res.on('finish', () => {
     const duration = Date.now() - start;
-    res.setHeader('X-Response-Time', `${duration}ms`);
+    // Note: Cannot set headers in 'finish' event as response is already sent
+    // X-Response-Time header would need to be set before response is sent
     logger.info('Request completed', {
       method: req.method,
       url: req.originalUrl,

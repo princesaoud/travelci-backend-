@@ -23,15 +23,29 @@ export class SupabaseService {
       const { data, error } = await operation();
 
       if (error) {
-        logger.error('Supabase query error', { error: error.message, code: error.code });
+        logger.error('Supabase query error', { 
+          error: error.message, 
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        
+        // Provide more specific error messages for common issues
+        if (error.code === 'PGRST116') {
+          throw new InfrastructureException(
+            'Erreur: Aucune donnée retournée. Vérifiez que la table existe et que les migrations ont été exécutées.',
+            error
+          );
+        }
+        
         throw new InfrastructureException(
-          `Erreur lors de l'exécution de la requête: ${error.message}`,
+          `Erreur lors de l'exécution de la requête: ${error.message}${error.hint ? ` (${error.hint})` : ''}`,
           error
         );
       }
 
       if (data === null) {
-        throw new InfrastructureException('Aucune donnée retournée par la requête');
+        throw new InfrastructureException('Aucune donnée retournée par la requête. La table existe-t-elle ?');
       }
 
       return data;

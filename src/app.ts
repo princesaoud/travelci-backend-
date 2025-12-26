@@ -4,8 +4,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { validateEnv } from './config/env';
-import { initCloudinary } from './config/cloudinary';
 import { initRedisConnection } from './config/redis';
+import { setupSwagger } from './config/swagger';
 import { errorHandler, notFoundHandler, requestIdMiddleware, timingMiddleware } from './middleware/error.middleware';
 import { logger } from './utils/logger';
 
@@ -29,19 +29,52 @@ try {
 }
 
 // Initialize services
-initCloudinary();
 initRedisConnection();
 
 // Security middleware
 app.use(helmet());
 
 // CORS configuration
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: true,
-  })
-);
+// Note: Mobile apps (iOS/Android) don't use CORS, but Flutter web does
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps, Postman, curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const allowedOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+      : [];
+
+    // In development, allow common Flutter web dev server origins
+    if (process.env.NODE_ENV === 'development') {
+      const devOrigins = [
+        'http://localhost',
+        'http://127.0.0.1',
+        ...allowedOrigins,
+      ];
+      const isAllowed = devOrigins.some((allowedOrigin) =>
+        origin.startsWith(allowedOrigin)
+      );
+      if (isAllowed) {
+        return callback(null, true);
+      }
+    }
+
+    // In production, check against allowed origins
+    if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
 
 // Compression middleware
 app.use(compression());
@@ -53,6 +86,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request ID and timing middleware
 app.use(requestIdMiddleware);
 app.use(timingMiddleware);
+
+// Swagger documentation
+setupSwagger(app);
 
 // Rate limiting
 const authLimiter = rateLimit({
@@ -87,8 +123,48 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Vérifie l'état de santé du serveur
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Serveur opérationnel
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 uptime:
+ *                   type: number
+ *                   description: Temps de fonctionnement en secondes
+ */
+// Root endpoint
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'TravelCI Backend API',
+    version: '1.0.0',
+    documentation: '/api-docs',
+    health: '/health',
+    endpoints: {
+      auth: '/api/auth',
+      properties: '/api/properties',
+      bookings: '/api/bookings',
+      images: '/api/images',
+    },
+  });
+});
+
+app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -110,13 +186,16 @@ app.use(errorHandler);
 
 /**
  * Start server
+ * Listens on all network interfaces (0.0.0.0) to allow connections from physical devices
  */
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for physical device testing
 
-const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`, {
+const server = app.listen(PORT, HOST, () => {
+  logger.info(`Server running on http://${HOST}:${PORT}`, {
     env: process.env.NODE_ENV,
     port: PORT,
+    host: HOST,
   });
 });
 

@@ -1,6 +1,6 @@
 import { SupabaseService } from './supabase.service';
 import { Property, CreatePropertyInput, UpdatePropertyInput, PropertyFilters } from '../models/Property.model';
-import { NotFoundException, ValidationException, BusinessRuleException, InfrastructureException } from '../utils/errors';
+import { NotFoundException, BusinessRuleException, InfrastructureException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { cacheService } from '../utils/cache';
 import { imageService } from './image.service';
@@ -184,15 +184,9 @@ export class PropertyService extends SupabaseService {
       // Get property to delete images
       const property = await this.getPropertyById(id);
 
-      // Delete images from Cloudinary
+      // Delete images from Supabase Storage
       if (property.image_urls && property.image_urls.length > 0) {
-        const publicIds = property.image_urls
-          .map((url) => imageService.extractPublicId(url))
-          .filter((id): id is string => id !== null);
-
-        if (publicIds.length > 0) {
-          await imageService.deleteImages(publicIds);
-        }
+        await imageService.deleteImages(property.image_urls);
       }
 
       // Delete property

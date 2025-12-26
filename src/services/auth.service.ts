@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { SupabaseService } from './supabase.service';
 import { User, CreateUserInput, UserResponse } from '../models/User.model';
@@ -26,15 +26,30 @@ export class AuthService extends SupabaseService {
    */
   async register(input: CreateUserInput): Promise<{ user: UserResponse; token: string }> {
     try {
-      // Check if user already exists
-      const existingUser = await this.executeQueryNullable<User>(
-        async () =>
-          await this.client
-            .from('users')
-            .select('*')
-            .eq('email', input.email)
-            .single()
-      );
+      // Check if user already exists - without .single() to avoid PGRST116
+      logger.info('Checking if user exists', { email: input.email });
+      const existingUserResult = await this.client
+        .from('users')
+        .select('*')
+        .eq('email', input.email);
+      
+      logger.info('Existing user check result', { 
+        hasData: !!existingUserResult.data,
+        dataLength: existingUserResult.data?.length || 0,
+        error: existingUserResult.error?.message 
+      });
+
+      if (existingUserResult.error && existingUserResult.error.code !== 'PGRST116') {
+        logger.error('Error checking existing user', { error: existingUserResult.error.message });
+        throw new InfrastructureException(
+          `Erreur lors de la vérification de l'utilisateur: ${existingUserResult.error.message}`,
+          existingUserResult.error
+        );
+      }
+
+      const existingUser = existingUserResult.data && existingUserResult.data.length > 0 
+        ? existingUserResult.data[0] as User 
+        : null;
 
       if (existingUser) {
         throw new ValidationException('Un utilisateur avec cet email existe déjà');
@@ -43,22 +58,49 @@ export class AuthService extends SupabaseService {
       // Hash password
       const passwordHash = await bcrypt.hash(input.password, this.saltRounds);
 
-      // Create user
-      const user = await this.executeQuery<User>(
-        async () =>
-          await this.client
-            .from('users')
-            .insert({
-              full_name: input.full_name,
-              email: input.email,
-              phone: input.phone,
-              password_hash: passwordHash,
-              role: input.role || 'client',
-              is_verified: false,
-            })
-            .select()
-            .single()
-      );
+      // Create user - Insert without .single() first to get better error messages
+      logger.info('Attempting to insert user', { email: input.email });
+      const insertResult = await this.client
+        .from('users')
+        .insert({
+          full_name: input.full_name,
+          email: input.email,
+          phone: input.phone,
+          password_hash: passwordHash,
+          role: input.role || 'client',
+          is_verified: false,
+        })
+        .select();
+      
+      logger.info('Insert result', { 
+        hasData: !!insertResult.data, 
+        dataLength: insertResult.data?.length || 0,
+        error: insertResult.error?.message,
+        errorCode: insertResult.error?.code,
+        errorDetails: insertResult.error?.details,
+        errorHint: insertResult.error?.hint
+      });
+
+      if (insertResult.error) {
+        logger.error('Insert failed', { 
+          error: insertResult.error.message,
+          code: insertResult.error.code,
+          details: insertResult.error.details 
+        });
+        throw new InfrastructureException(
+          `Erreur lors de l'insertion: ${insertResult.error.message}${insertResult.error.details ? ` (${insertResult.error.details})` : ''}`,
+          insertResult.error
+        );
+      }
+
+      if (!insertResult.data || insertResult.data.length === 0) {
+        logger.error('Insert returned no data', { email: input.email });
+        throw new InfrastructureException(
+          'L\'insertion a réussi mais aucune donnée n\'a été retournée. Vérifiez que les triggers ou contraintes n\'empêchent pas le retour des données.'
+        );
+      }
+
+      const user = insertResult.data[0] as User;
 
       // Generate token
       const token = this.generateToken({
@@ -174,8 +216,8 @@ export class AuthService extends SupabaseService {
   generateToken(payload: JWTPayload): string {
     try {
       return jwt.sign(payload, env.JWT_SECRET, {
-        expiresIn: env.JWT_EXPIRES_IN,
-      });
+        expiresIn: env.JWT_EXPIRES_IN as string | number,
+      } as SignOptions);
     } catch (error: any) {
       logger.error('Token generation error', { error: error.message });
       throw new InfrastructureException('Erreur lors de la génération du token', error);

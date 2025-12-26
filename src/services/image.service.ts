@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { v2 as cloudinary } from 'cloudinary';
+import { getSupabaseServiceClient } from '../config/supabase';
 import { logger } from '../utils/logger';
 import { InfrastructureException } from '../utils/errors';
 
@@ -22,7 +22,7 @@ export interface OptimizedImages {
 }
 
 /**
- * Image service for processing and uploading images
+ * Image service for processing and uploading images using Supabase Storage
  */
 export class ImageService {
   private readonly sizes: ImageSize[] = [
@@ -30,44 +30,71 @@ export class ImageService {
     { width: 800, height: 600, suffix: 'medium' },
     { width: 1920, height: 1080, suffix: 'large' },
   ];
+  private readonly bucketName = 'property-images';
+
+  /**
+   * Upload buffer to Supabase Storage
+   */
+  private async uploadToStorage(
+    file: Buffer,
+    path: string,
+    contentType: string = 'image/webp'
+  ): Promise<string> {
+    try {
+      const supabase = getSupabaseServiceClient();
+
+      const { data, error } = await supabase.storage
+        .from(this.bucketName)
+        .upload(path, file, {
+          contentType,
+          upsert: true,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(this.bucketName)
+        .getPublicUrl(data.path);
+
+      if (!urlData?.publicUrl) {
+        throw new Error('Failed to get public URL from Supabase Storage');
+      }
+
+      return urlData.publicUrl;
+    } catch (error: any) {
+      logger.error('Supabase Storage upload error', {
+        error: error.message,
+        path,
+      });
+      throw new InfrastructureException(
+        `Erreur lors du téléchargement vers Supabase Storage: ${error.message}`,
+        error
+      );
+    }
+  }
 
   /**
    * Upload and optimize image with multiple sizes
    */
   async uploadAndOptimize(file: Buffer, propertyId: string): Promise<OptimizedImages> {
     try {
+      const timestamp = Date.now();
       const optimizedImages = await Promise.all(
         this.sizes.map(async ({ width, height, suffix }) => {
+          // Optimize image with Sharp
           const optimized = await sharp(file)
             .resize(width, height, { fit: 'cover', withoutEnlargement: true })
             .webp({ quality: 85 })
             .toBuffer();
 
-          return new Promise<string>((resolve, reject) => {
-            cloudinary.uploader
-              .upload_stream(
-                {
-                  folder: `properties/${propertyId}`,
-                  public_id: suffix,
-                  format: 'webp',
-                  transformation: [
-                    { width, height, crop: 'fill' },
-                    { quality: 'auto' },
-                    { fetch_format: 'auto' },
-                  ],
-                },
-                (error, result) => {
-                  if (error) {
-                    reject(error);
-                  } else if (result) {
-                    resolve(result.secure_url);
-                  } else {
-                    reject(new Error('No result from Cloudinary'));
-                  }
-                }
-              )
-              .end(optimized);
-          });
+          // Upload to Supabase Storage
+          const path = `properties/${propertyId}/${timestamp}-${suffix}.webp`;
+          const url = await this.uploadToStorage(optimized, path, 'image/webp');
+
+          return url;
         })
       );
 
@@ -90,35 +117,19 @@ export class ImageService {
    */
   async uploadSingle(file: Buffer, folder: string, publicId?: string): Promise<string> {
     try {
+      // Optimize image with Sharp
       const optimized = await sharp(file)
         .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 85 })
         .toBuffer();
 
-      return new Promise<string>((resolve, reject) => {
-        cloudinary.uploader
-          .upload_stream(
-            {
-              folder,
-              public_id: publicId,
-              format: 'webp',
-              transformation: [
-                { quality: 'auto' },
-                { fetch_format: 'auto' },
-              ],
-            },
-            (error, result) => {
-              if (error) {
-                reject(error);
-              } else if (result) {
-                resolve(result.secure_url);
-              } else {
-                reject(new Error('No result from Cloudinary'));
-              }
-            }
-          )
-          .end(optimized);
-      });
+      // Generate path
+      const timestamp = Date.now();
+      const filename = publicId || `${timestamp}.webp`;
+      const path = `${folder}/${filename}`;
+
+      // Upload to Supabase Storage
+      return await this.uploadToStorage(optimized, path, 'image/webp');
     } catch (error: any) {
       logger.error('Single image upload error', { error: error.message, folder });
       throw new InfrastructureException(
@@ -129,37 +140,43 @@ export class ImageService {
   }
 
   /**
-   * Get optimized URL from Cloudinary
+   * Get optimized URL - returns original URL (images are pre-optimized)
+   * This method is kept for backward compatibility but doesn't do transformation
    */
   getOptimizedUrl(
     originalUrl: string,
-    width?: number,
-    height?: number,
-    format?: string
+    _width?: number,
+    _height?: number,
+    _format?: string
   ): string {
-    try {
-      return cloudinary.url(originalUrl, {
-        width: width || 800,
-        height: height || 600,
-        crop: 'fill',
-        quality: 'auto',
-        format: format || 'auto',
-      });
-    } catch (error: any) {
-      logger.error('URL optimization error', { error: error.message, originalUrl });
-      // Return original URL if optimization fails
-      return originalUrl;
-    }
+    // Since we pre-optimize images with Sharp, we just return the original URL
+    // If you need dynamic resizing, you could use Supabase Storage image transformations
+    // or serve different pre-generated sizes
+    return originalUrl;
   }
 
   /**
-   * Delete image from Cloudinary
+   * Delete image from Supabase Storage
    */
-  async deleteImage(publicId: string): Promise<void> {
+  async deleteImage(url: string): Promise<void> {
     try {
-      await cloudinary.uploader.destroy(publicId);
+      const supabase = getSupabaseServiceClient();
+
+      // Extract path from URL
+      const path = this.extractPathFromUrl(url);
+      if (!path) {
+        throw new Error('Invalid URL format');
+      }
+
+      const { error } = await supabase.storage
+        .from(this.bucketName)
+        .remove([path]);
+
+      if (error) {
+        throw error;
+      }
     } catch (error: any) {
-      logger.error('Image deletion error', { error: error.message, publicId });
+      logger.error('Image deletion error', { error: error.message, url });
       throw new InfrastructureException(
         `Erreur lors de la suppression de l'image: ${error.message}`,
         error
@@ -168,13 +185,33 @@ export class ImageService {
   }
 
   /**
-   * Delete multiple images from Cloudinary
+   * Delete multiple images from Supabase Storage
    */
-  async deleteImages(publicIds: string[]): Promise<void> {
+  async deleteImages(urls: string[]): Promise<void> {
     try {
-      await cloudinary.api.delete_resources(publicIds);
+      const supabase = getSupabaseServiceClient();
+
+      // Extract paths from URLs
+      const paths = urls
+        .map((url) => this.extractPathFromUrl(url))
+        .filter((path): path is string => path !== null);
+
+      if (paths.length === 0) {
+        return;
+      }
+
+      const { error } = await supabase.storage
+        .from(this.bucketName)
+        .remove(paths);
+
+      if (error) {
+        throw error;
+      }
     } catch (error: any) {
-      logger.error('Bulk image deletion error', { error: error.message, count: publicIds.length });
+      logger.error('Bulk image deletion error', {
+        error: error.message,
+        count: urls.length,
+      });
       throw new InfrastructureException(
         `Erreur lors de la suppression des images: ${error.message}`,
         error
@@ -183,12 +220,13 @@ export class ImageService {
   }
 
   /**
-   * Extract public ID from Cloudinary URL
+   * Extract path from Supabase Storage URL
    */
-  extractPublicId(url: string): string | null {
+  private extractPathFromUrl(url: string): string | null {
     try {
-      const matches = url.match(/\/v\d+\/(.+)\.(jpg|jpeg|png|webp|gif)/i);
-      return matches ? matches[1] : null;
+      // Supabase Storage URL format: https://[project].supabase.co/storage/v1/object/public/[bucket]/[path]
+      const match = url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+      return match ? match[1] : null;
     } catch {
       return null;
     }
@@ -196,4 +234,3 @@ export class ImageService {
 }
 
 export const imageService = new ImageService();
-
