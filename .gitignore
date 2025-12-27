@@ -7,6 +7,12 @@ yarn.lock
 dist/
 build/
 
+# Compiled files in api/ (Vercel handles compilation)
+api/*.js
+api/*.js.map
+api/*.d.ts
+api/*.d.ts.map
+
 # Environment variables
 .env
 .env.local
@@ -39,3 +45,5 @@ tmp/
 temp/
 *.tmp
 
+.vercel
+.env*.local

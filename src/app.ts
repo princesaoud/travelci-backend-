@@ -21,11 +21,18 @@ import imageRoutes from './routes/image.routes';
 const app: Express = express();
 
 // Validate environment variables
+// On Vercel/serverless, we don't exit - let the function handle errors gracefully
+let envValidationError: Error | null = null;
 try {
   validateEnv();
 } catch (error: any) {
+  envValidationError = error;
   logger.error('Environment validation failed', { error: error.message });
-  process.exit(1);
+  // On serverless platforms (Vercel), don't exit - let the error handler catch it
+  if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+  // In serverless, the error will be caught by the error handler middleware
 }
 
 // Initialize services
@@ -159,7 +166,23 @@ const generalLimiter = rateLimit({
  *                   description: Temps de fonctionnement en secondes
  */
 // Root endpoint
-app.get('/', (_req, res) => {
+app.get('/', (_req, res): void => {
+  // Check if environment validation failed
+  if (envValidationError) {
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erreur de configuration : Variables d\'environnement manquantes',
+        code: 'ENV_VALIDATION_ERROR',
+        details: process.env.NODE_ENV === 'production' 
+          ? undefined 
+          : envValidationError.message,
+        statusCode: 500,
+      },
+    });
+    return;
+  }
+
   res.json({
     message: 'TravelCI Backend API',
     version: '1.0.0',
@@ -174,7 +197,17 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.get('/health', (_req, res) => {
+app.get('/health', (_req, res): void => {
+  // Check if environment validation failed
+  if (envValidationError) {
+    res.status(503).json({
+      status: 'error',
+      message: 'Service unavailable: Configuration error',
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -182,11 +215,29 @@ app.get('/health', (_req, res) => {
   });
 });
 
-// API routes
-app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/properties', searchLimiter, propertyRoutes);
-app.use('/api/bookings', generalLimiter, bookingRoutes);
-app.use('/api/images', imageUploadLimiter, imageRoutes);
+// API routes - Add middleware to check env validation first
+const checkEnvMiddleware = (_req: express.Request, res: express.Response, next: express.NextFunction): void => {
+  if (envValidationError) {
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Erreur de configuration : Variables d\'environnement manquantes',
+        code: 'ENV_VALIDATION_ERROR',
+        details: process.env.NODE_ENV === 'production' 
+          ? undefined 
+          : envValidationError.message,
+        statusCode: 500,
+      },
+    });
+    return;
+  }
+  next();
+};
+
+app.use('/api/auth', checkEnvMiddleware, authLimiter, authRoutes);
+app.use('/api/properties', checkEnvMiddleware, searchLimiter, propertyRoutes);
+app.use('/api/bookings', checkEnvMiddleware, generalLimiter, bookingRoutes);
+app.use('/api/images', checkEnvMiddleware, imageUploadLimiter, imageRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -14,3 +14,9 @@ scripts/
 .vscode/
 .idea/
 
+# Ignore compiled JavaScript files in api/ (Vercel will compile TypeScript itself)
+api/*.js
+api/*.js.map
+api/*.d.ts
+api/*.d.ts.map
+

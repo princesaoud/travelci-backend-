@@ -3,10 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import { env } from '../config/env';
 
-// Ensure logs directory exists
+// Ensure logs directory exists (skip on Vercel/serverless where filesystem is read-only)
 const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+if (!process.env.VERCEL && !fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+  } catch (error) {
+    // If we can't create logs directory, continue without file logging
+    console.warn('Could not create logs directory, file logging disabled');
+  }
 }
 
 /**
@@ -31,33 +36,46 @@ const consoleFormat = winston.format.combine(
   })
 );
 
+// Build transports array
+const transports: winston.transport[] = [];
+
+// Add file transports only if not on Vercel (filesystem may be read-only)
+if (!process.env.VERCEL) {
+  try {
+    if (fs.existsSync(logsDir)) {
+      transports.push(
+        new winston.transports.File({
+          filename: 'logs/error.log',
+          level: 'error',
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        }),
+        new winston.transports.File({
+          filename: 'logs/combined.log',
+          maxsize: 5242880, // 5MB
+          maxFiles: 5,
+        })
+      );
+    }
+  } catch (error) {
+    // If file transports fail, continue without them
+    console.warn('File logging unavailable, using console only');
+  }
+}
+
+// Always add console transport (works on Vercel)
+transports.push(
+  new winston.transports.Console({
+    format: process.env.VERCEL ? logFormat : consoleFormat,
+  })
+);
+
 export const logger = winston.createLogger({
   level: env.NODE_ENV === 'production' ? 'info' : 'debug',
   format: logFormat,
   defaultMeta: { service: 'travelci-backend' },
-  transports: [
-    new winston.transports.File({
-      filename: 'logs/error.log',
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-    new winston.transports.File({
-      filename: 'logs/combined.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5,
-    }),
-  ],
+  transports,
 });
-
-// Add console transport in non-production environments
-if (env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
-}
 
 /**
  * Log request with timing
