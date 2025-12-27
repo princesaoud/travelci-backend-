@@ -9,29 +9,51 @@ process.env.VERCEL = '1';
 // Wrap app import in try-catch to handle initialization errors gracefully
 let app: any;
 let initError: Error | null = null;
+let initErrorDetails: any = null;
 
 try {
   app = require('../src/app').default;
 } catch (error: any) {
   // Store initialization error to handle it in the handler
   initError = error;
-  console.error('Failed to initialize app:', error.message, error.stack);
+  initErrorDetails = {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+    code: error.code,
+  };
+  
+  // Log full error details for debugging
+  console.error('=== APP INITIALIZATION FAILED ===');
+  console.error('Error Message:', error.message);
+  console.error('Error Name:', error.name);
+  console.error('Error Code:', error.code);
+  console.error('Error Stack:', error.stack);
+  console.error('NODE_ENV:', process.env.NODE_ENV);
+  console.error('VERCEL:', process.env.VERCEL);
+  console.error('Available env vars:', Object.keys(process.env).filter(k => 
+    k.includes('SUPABASE') || k.includes('JWT') || k === 'NODE_ENV'
+  ));
+  console.error('==================================');
   
   // Create a minimal Express app to handle errors gracefully
   const express = require('express');
   app = express();
   
+  // Parse JSON for error responses
+  app.use(express.json());
+  
   // Return error response for all routes
   app.use('*', (_req: any, res: any) => {
-    console.error('App initialization error:', initError?.message);
+    console.error('Request received but app not initialized:', initError?.message);
     res.status(500).json({
       success: false,
       error: {
         message: 'Erreur d\'initialisation du serveur. Vérifiez les variables d\'environnement.',
         code: 'INIT_ERROR',
-        details: process.env.NODE_ENV === 'production' 
-          ? undefined 
-          : initError?.message,
+        // Include error details even in production for debugging Vercel issues
+        details: initError?.message || 'Unknown initialization error',
+        errorType: initError?.name,
         statusCode: 500,
       },
     });
