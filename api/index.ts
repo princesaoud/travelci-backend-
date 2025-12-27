@@ -9,19 +9,12 @@ process.env.VERCEL = '1';
 // Wrap app import in try-catch to handle initialization errors gracefully
 let app: any;
 let initError: Error | null = null;
-let initErrorDetails: any = null;
 
 try {
   app = require('../src/app').default;
 } catch (error: any) {
   // Store initialization error to handle it in the handler
   initError = error;
-  initErrorDetails = {
-    message: error.message,
-    stack: error.stack,
-    name: error.name,
-    code: error.code,
-  };
   
   // Log full error details for debugging
   console.error('=== APP INITIALIZATION FAILED ===');
