@@ -197,34 +197,39 @@ app.use(errorHandler);
 /**
  * Start server
  * Listens on all network interfaces (0.0.0.0) to allow connections from physical devices
+ * Skip server startup if running on Vercel (serverless environment)
  */
-const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for physical device testing
+if (!process.env.VERCEL) {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for physical device testing
 
-const server = app.listen(PORT, HOST, () => {
-  logger.info(`Server running on http://${HOST}:${PORT}`, {
-    env: process.env.NODE_ENV,
-    port: PORT,
-    host: HOST,
+  const server = app.listen(PORT, HOST, () => {
+    logger.info(`Server running on http://${HOST}:${PORT}`, {
+      env: process.env.NODE_ENV,
+      port: PORT,
+      host: HOST,
+    });
   });
-});
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM signal received: closing HTTP server');
+    server.close(() => {
+      logger.info('HTTP server closed');
+      process.exit(0);
+    });
   });
-});
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
+  process.on('SIGINT', () => {
+    logger.info('SIGINT signal received: closing HTTP server');
+    server.close(() => {
+      logger.info('HTTP server closed');
+      process.exit(0);
+    });
   });
-});
+} else {
+  logger.info('Running on Vercel serverless environment');
+}
 
 export default app;
 

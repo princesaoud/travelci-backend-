@@ -1,0 +1,16 @@
+# Ignore files for Vercel deployment
+node_modules/
+dist/
+logs/
+*.log
+.env
+.env.local
+.env.*.local
+supabase/
+scripts/
+*.md
+!README.md
+.DS_Store
+.vscode/
+.idea/
+
