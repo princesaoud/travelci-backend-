@@ -3,8 +3,8 @@
 Use this prompt to integrate your Flutter **mobile app** with the TravelCI Backend API.
 
 **Your Testing Setup:**
-- Device IP: `192.168.100.32`
-- API Base URL: `http://192.168.100.32:3000`
+- Device IP: `192.168.100.10`
+- API Base URL: `http://192.168.100.10:3000`
 - Make sure your computer and mobile device are on the same Wi-Fi network!
 
 ---
@@ -14,18 +14,18 @@ Use this prompt to integrate your Flutter **mobile app** with the TravelCI Backe
 ### For Flutter App (Use These)
 - **Base URL (Android Emulator)**: `http://10.0.2.2:3000`
 - **Base URL (iOS Simulator)**: `http://localhost:3000`
-- **Base URL (Physical Device)**: `http://192.168.100.32:3000` ✅ Your Testing IP
+- **Base URL (Physical Device)**: `http://192.168.100.10:3000` ✅ Your Testing IP
 - **API Path**: `/api`
 
 ### Complete Endpoint URLs
 
 **For Physical Device (Your Testing Setup):**
-- Health: `http://192.168.100.32:3000/health`
-- Register: `http://192.168.100.32:3000/api/auth/register`
-- Login: `http://192.168.100.32:3000/api/auth/login`
-- Get User: `http://192.168.100.32:3000/api/auth/me`
-- Properties: `http://192.168.100.32:3000/api/properties`
-- Bookings: `http://192.168.100.32:3000/api/bookings`
+- Health: `http://192.168.100.10:3000/health`
+- Register: `http://192.168.100.10:3000/api/auth/register`
+- Login: `http://192.168.100.10:3000/api/auth/login`
+- Get User: `http://192.168.100.10:3000/api/auth/me`
+- Properties: `http://192.168.100.10:3000/api/properties`
+- Bookings: `http://192.168.100.10:3000/api/bookings`
 
 **For Android Emulator:**
 - Base: `http://10.0.2.2:3000/api/...`
@@ -47,7 +47,7 @@ Use this prompt to integrate your Flutter **mobile app** with the TravelCI Backe
 - **Local Development (Desktop/Simulator)**: `http://localhost:3000`
 - **Android Emulator**: `http://10.0.2.2:3000`
 - **iOS Simulator**: `http://localhost:3000`
-- **Physical Device**: `http://192.168.100.32:3000` ✅ (Your testing setup)
+- **Physical Device**: `http://192.168.100.10:3000` ✅ (Your testing setup)
 
 **API Base Path**: `/api`
 
@@ -84,7 +84,7 @@ const String baseUrl = 'http://localhost:3000';
 **For Physical Device (Your Setup):**
 ```dart
 // Your actual testing IP
-const String baseUrl = 'http://192.168.100.32:3000';
+const String baseUrl = 'http://192.168.100.10:3000';
 ```
 
 **Note:** Make sure your computer (running the API) and mobile device are on the same Wi-Fi network!

@@ -40,6 +40,18 @@ export const env = {
   // Mobile apps (iOS/Android) don't need CORS configuration
   // Example: CORS_ORIGIN=http://localhost:3000,http://localhost:8080
   CORS_ORIGIN: process.env.CORS_ORIGIN || '',
+
+  // Rate Limiting - Configurable via environment variables
+  RATE_LIMIT_AUTH_MAX: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '20', 10),
+  RATE_LIMIT_AUTH_WINDOW_MS: parseInt(
+    process.env.RATE_LIMIT_AUTH_WINDOW_MS || '900000',
+    10
+  ), // 15 minutes default
+  RATE_LIMIT_GENERAL_MAX: parseInt(process.env.RATE_LIMIT_GENERAL_MAX || '200', 10),
+  RATE_LIMIT_GENERAL_WINDOW_MS: parseInt(
+    process.env.RATE_LIMIT_GENERAL_WINDOW_MS || '900000',
+    10
+  ), // 15 minutes default
 };
 
 /**

@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
-import { validateEnv } from './config/env';
+import { validateEnv, env } from './config/env';
 import { initRedisConnection } from './config/redis';
 import { setupSwagger } from './config/swagger';
 import { errorHandler, notFoundHandler, requestIdMiddleware, timingMiddleware } from './middleware/error.middleware';
@@ -90,13 +90,19 @@ app.use(timingMiddleware);
 // Swagger documentation
 setupSwagger(app);
 
-// Rate limiting
+// Rate limiting - Configurable via environment variables
+// Development: More lenient limits (20 requests per 15 min)
+// Production: Stricter limits (can be configured via env vars)
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  windowMs: env.RATE_LIMIT_AUTH_WINDOW_MS,
+  max: env.RATE_LIMIT_AUTH_MAX,
   message: 'Trop de tentatives de connexion, veuillez réessayer plus tard',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks and in test mode
+    return req.path === '/health' || req.path === '/' || process.env.NODE_ENV === 'test';
+  },
 });
 
 const searchLimiter = rateLimit({
@@ -116,11 +122,15 @@ const imageUploadLimiter = rateLimit({
 });
 
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
+  windowMs: env.RATE_LIMIT_GENERAL_WINDOW_MS,
+  max: env.RATE_LIMIT_GENERAL_MAX,
   message: 'Trop de requêtes, veuillez réessayer plus tard',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks and in test mode
+    return req.path === '/health' || req.path === '/' || process.env.NODE_ENV === 'test';
+  },
 });
 
 /**
