@@ -22,7 +22,7 @@ try {
   app = express();
   
   // Return error response for all routes
-  app.use('*', (req: any, res: any) => {
+  app.use('*', (_req: any, res: any) => {
     console.error('App initialization error:', initError?.message);
     res.status(500).json({
       success: false,
