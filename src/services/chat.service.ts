@@ -46,7 +46,7 @@ export class ChatService extends SupabaseService {
           `
           )
           .eq('client_id', userId)
-          .order('last_message_at', { ascending: false, nullsLast: true })
+          .order('last_message_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
       } else if (role === 'owner') {
@@ -61,7 +61,7 @@ export class ChatService extends SupabaseService {
           `
           )
           .eq('owner_id', userId)
-          .order('last_message_at', { ascending: false, nullsLast: true })
+          .order('last_message_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
       } else {
@@ -75,7 +75,7 @@ export class ChatService extends SupabaseService {
             owner:users!conversations_owner_id_fkey(id, full_name, email)
           `
           )
-          .order('last_message_at', { ascending: false, nullsLast: true })
+          .order('last_message_at', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false })
           .range(offset, offset + limit - 1);
       }

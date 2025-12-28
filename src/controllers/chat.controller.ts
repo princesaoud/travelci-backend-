@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { chatService } from '../services/chat.service';
 import { CreateConversationInput, CreateMessageInput } from '../models/Chat.model';
-import { sendSuccess, sendPaginatedSuccess, sendError, calculatePagination } from '../utils/responses';
+import { sendSuccess, sendPaginatedSuccess, sendError } from '../utils/responses';
 import { NotFoundException, ValidationException, BusinessRuleException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { cacheService } from '../utils/cache';
