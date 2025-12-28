@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.routes';
 import propertyRoutes from './routes/property.routes';
 import bookingRoutes from './routes/booking.routes';
 import imageRoutes from './routes/image.routes';
+import chatRoutes, { messageRouter } from './routes/chat.routes';
 
 /**
  * Create Express app
@@ -188,11 +189,13 @@ app.get('/', (_req, res): void => {
     version: '1.0.0',
     documentation: '/api-docs',
     health: '/health',
-    endpoints: {
+      endpoints: {
       auth: '/api/auth',
       properties: '/api/properties',
       bookings: '/api/bookings',
       images: '/api/images',
+      conversations: '/api/conversations',
+      messages: '/api/messages',
     },
   });
 });
@@ -238,6 +241,8 @@ app.use('/api/auth', checkEnvMiddleware, authLimiter, authRoutes);
 app.use('/api/properties', checkEnvMiddleware, searchLimiter, propertyRoutes);
 app.use('/api/bookings', checkEnvMiddleware, generalLimiter, bookingRoutes);
 app.use('/api/images', checkEnvMiddleware, imageUploadLimiter, imageRoutes);
+app.use('/api/conversations', checkEnvMiddleware, generalLimiter, chatRoutes);
+app.use('/api/messages', checkEnvMiddleware, generalLimiter, messageRouter);
 
 // 404 handler
 app.use(notFoundHandler);

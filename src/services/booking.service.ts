@@ -3,6 +3,7 @@ import { Booking, CreateBookingInput, UpdateBookingStatusInput, BookingWithPrope
 import { NotFoundException, ValidationException, BusinessRuleException, InfrastructureException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { propertyService } from './property.service';
+import { chatService } from './chat.service';
 
 /**
  * Booking service for booking management
@@ -175,6 +176,17 @@ export class BookingService extends SupabaseService {
             .select()
             .single()
       );
+
+      // Auto-create conversation for this booking
+      // Use a fire-and-forget approach - don't let conversation creation failure break booking creation
+      chatService
+        .createConversationForBooking(booking.id, clientId)
+        .catch((error) => {
+          logger.warn('Failed to auto-create conversation for booking', {
+            bookingId: booking.id,
+            error: error.message,
+          });
+        });
 
       return booking;
     } catch (error: any) {
