@@ -385,6 +385,7 @@ export class ChatService extends SupabaseService {
           sender_id: senderId,
           content: input.content.trim(),
           is_read: false,
+          message_type: input.message_type || 'user',
         })
         .select(
           `
@@ -631,6 +632,115 @@ export class ChatService extends SupabaseService {
         bookingId,
       });
       // Don't throw - conversation creation should not break booking creation
+    }
+  }
+
+  /**
+   * Create a system message in a conversation for booking status changes
+   * This is called by booking service when booking status changes
+   */
+  async createSystemMessageForBookingStatus(
+    bookingId: string,
+    status: string,
+    propertyTitle?: string
+  ): Promise<void> {
+    try {
+      // Get conversation for this booking
+      const conversationResult = await this.client
+        .from('conversations')
+        .select('id')
+        .eq('booking_id', bookingId)
+        .single();
+
+      if (conversationResult.error || !conversationResult.data) {
+        logger.warn('No conversation found for booking when creating system message', {
+          bookingId,
+          error: conversationResult.error?.message,
+        });
+        return; // Don't throw - system message is not critical
+      }
+
+      const conversationId = conversationResult.data.id;
+
+      // Get conversation details to find client_id and owner_id
+      const conversationDetails = await this.executeQueryNullable<Conversation>(
+        async () =>
+          await this.client
+            .from('conversations')
+            .select('*')
+            .eq('id', conversationId)
+            .single()
+      );
+
+      if (!conversationDetails) {
+        logger.warn('Conversation details not found', { conversationId });
+        return;
+      }
+
+      // Create appropriate message based on status
+      let messageContent = '';
+      let senderId = conversationDetails.owner_id; // Default to owner for system messages
+
+      switch (status) {
+        case 'pending':
+          messageContent = propertyTitle
+            ? `Une nouvelle réservation pour "${propertyTitle}" a été créée et est en attente de confirmation.`
+            : 'Une nouvelle réservation a été créée et est en attente de confirmation.';
+          senderId = conversationDetails.client_id; // Client creates the booking
+          break;
+        case 'accepted':
+          messageContent = propertyTitle
+            ? `Votre réservation pour "${propertyTitle}" a été acceptée.`
+            : 'Votre réservation a été acceptée.';
+          senderId = conversationDetails.owner_id;
+          break;
+        case 'declined':
+          messageContent = propertyTitle
+            ? `Votre réservation pour "${propertyTitle}" a été refusée.`
+            : 'Votre réservation a été refusée.';
+          senderId = conversationDetails.owner_id;
+          break;
+        case 'cancelled':
+          messageContent = 'La réservation a été annulée.';
+          // For cancelled, determine who cancelled based on context
+          // Default to owner for now
+          senderId = conversationDetails.owner_id;
+          break;
+        default:
+          messageContent = `Le statut de la réservation a été mis à jour : ${status}`;
+          senderId = conversationDetails.owner_id;
+      }
+
+      // Create system message
+      const { error } = await this.client.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: messageContent,
+        is_read: false,
+        message_type: 'system',
+      });
+
+      if (error) {
+        logger.error('Error creating system message for booking status', {
+          error: error.message,
+          bookingId,
+          conversationId,
+          status,
+        });
+      } else {
+        logger.info('System message created for booking status change', {
+          bookingId,
+          conversationId,
+          status,
+        });
+      }
+    } catch (error: any) {
+      logger.error('Error in createSystemMessageForBookingStatus', {
+        error: error.message,
+        bookingId,
+        status,
+      });
+      // Don't throw - system message creation should not break booking update
     }
   }
 }

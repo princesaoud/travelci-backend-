@@ -20,6 +20,7 @@ export interface Message {
   sender_id: string;
   content: string;
   is_read: boolean;
+  message_type: 'user' | 'system';
   created_at: string;
 }
 
@@ -35,6 +36,7 @@ export interface CreateConversationInput {
  */
 export interface CreateMessageInput {
   content: string;
+  message_type?: 'user' | 'system';
 }
 
 /**

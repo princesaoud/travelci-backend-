@@ -181,8 +181,16 @@ export class BookingService extends SupabaseService {
       // Use a fire-and-forget approach - don't let conversation creation failure break booking creation
       chatService
         .createConversationForBooking(booking.id, clientId)
+        .then(() => {
+          // After conversation is created, add a system message about the booking creation
+          return chatService.createSystemMessageForBookingStatus(
+            booking.id,
+            'pending',
+            property.title
+          );
+        })
         .catch((error) => {
-          logger.warn('Failed to auto-create conversation for booking', {
+          logger.warn('Failed to auto-create conversation or system message for booking', {
             bookingId: booking.id,
             error: error.message,
           });
@@ -226,6 +234,17 @@ export class BookingService extends SupabaseService {
             .single()
       );
 
+      // Create system message in conversation for status change
+      chatService
+        .createSystemMessageForBookingStatus(id, input.status, property.title)
+        .catch((error) => {
+          logger.warn('Failed to create system message for booking status change', {
+            bookingId: id,
+            status: input.status,
+            error: error.message,
+          });
+        });
+
       return updatedBooking;
     } catch (error: any) {
       if (error instanceof NotFoundException || error instanceof ValidationException) {
@@ -261,6 +280,9 @@ export class BookingService extends SupabaseService {
         }
       }
 
+      // Get property for system message
+      const property = await propertyService.getPropertyById(booking.property_id);
+
       // Update status to cancelled
       await this.executeQuery(
         async () =>
@@ -272,6 +294,16 @@ export class BookingService extends SupabaseService {
             })
             .eq('id', id)
       );
+
+      // Create system message in conversation for cancellation
+      chatService
+        .createSystemMessageForBookingStatus(id, 'cancelled', property.title)
+        .catch((error) => {
+          logger.warn('Failed to create system message for booking cancellation', {
+            bookingId: id,
+            error: error.message,
+          });
+        });
     } catch (error: any) {
       if (error instanceof NotFoundException || error instanceof ValidationException || error instanceof BusinessRuleException) {
         throw error;
