@@ -22,6 +22,9 @@ export interface Message {
   is_read: boolean;
   message_type: 'user' | 'system';
   created_at: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
 }
 
 /**
@@ -37,6 +40,9 @@ export interface CreateConversationInput {
 export interface CreateMessageInput {
   content: string;
   message_type?: 'user' | 'system';
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
 }
 
 /**

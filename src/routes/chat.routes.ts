@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { body, param, query } from 'express-validator';
+import multer from 'multer';
 import {
   getConversations,
   getConversationById,
@@ -8,11 +9,18 @@ import {
   sendMessage,
   markMessageAsRead,
   getUnreadCount,
+  uploadMessageFile,
 } from '../controllers/chat.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateBody, validateParams, validateQuery } from '../middleware/validation.middleware';
 
 const router = Router();
+
+// Configure multer for message file uploads
+const messageFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+});
 
 /**
  * @swagger
@@ -346,6 +354,57 @@ router.get(
   authenticate,
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
   getUnreadCount
+);
+
+/**
+ * @swagger
+ * /api/conversations/{id}/upload-file:
+ *   post:
+ *     summary: Télécharger un fichier pour un message
+ *     description: Télécharge un fichier qui sera joint à un message
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la conversation
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Fichier à télécharger
+ *     responses:
+ *       200:
+ *         description: Fichier téléchargé avec succès
+ *       400:
+ *         description: Erreur de validation
+ *       401:
+ *         description: Non authentifié
+ */
+const messageFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+});
+
+router.post(
+  '/:id/upload-file',
+  authenticate,
+  validateParams([param('id').isUUID().withMessage('ID invalide')]),
+  messageFileUpload.single('file'),
+  uploadMessageFile
 );
 
 export default router;

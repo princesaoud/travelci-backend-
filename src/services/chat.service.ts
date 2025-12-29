@@ -42,7 +42,10 @@ export class ChatService extends SupabaseService {
             `
             *,
             client:users!conversations_client_id_fkey(id, full_name, email),
-            owner:users!conversations_owner_id_fkey(id, full_name, email)
+            owner:users!conversations_owner_id_fkey(id, full_name, email),
+            booking:bookings!conversations_booking_id_fkey(
+              property:properties!bookings_property_id_fkey(id, title)
+            )
           `
           )
           .eq('client_id', userId)
@@ -57,7 +60,10 @@ export class ChatService extends SupabaseService {
             `
             *,
             client:users!conversations_client_id_fkey(id, full_name, email),
-            owner:users!conversations_owner_id_fkey(id, full_name, email)
+            owner:users!conversations_owner_id_fkey(id, full_name, email),
+            booking:bookings!conversations_booking_id_fkey(
+              property:properties!bookings_property_id_fkey(id, title)
+            )
           `
           )
           .eq('owner_id', userId)
@@ -72,7 +78,10 @@ export class ChatService extends SupabaseService {
             `
             *,
             client:users!conversations_client_id_fkey(id, full_name, email),
-            owner:users!conversations_owner_id_fkey(id, full_name, email)
+            owner:users!conversations_owner_id_fkey(id, full_name, email),
+            booking:bookings!conversations_booking_id_fkey(
+              property:properties!bookings_property_id_fkey(id, title)
+            )
           `
           )
           .order('last_message_at', { ascending: false, nullsFirst: false })
@@ -135,7 +144,10 @@ export class ChatService extends SupabaseService {
           `
           *,
           client:users!conversations_client_id_fkey(id, full_name, email),
-          owner:users!conversations_owner_id_fkey(id, full_name, email)
+          owner:users!conversations_owner_id_fkey(id, full_name, email),
+          booking:bookings!conversations_booking_id_fkey(
+            property:properties!bookings_property_id_fkey(id, title)
+          )
         `
         )
         .eq('id', id)
@@ -152,7 +164,7 @@ export class ChatService extends SupabaseService {
         throw new NotFoundException('Conversation non trouvée');
       }
 
-      const conversation = data as ConversationWithDetails;
+      const conversation = data as any;
 
       // Check access: user must be client or owner
       if (userRole !== 'admin') {
@@ -164,6 +176,12 @@ export class ChatService extends SupabaseService {
         }
       }
 
+      // Extract property title from booking relation
+      let propertyTitle: string | undefined;
+      if (conversation.booking?.property?.title) {
+        propertyTitle = conversation.booking.property.title;
+      }
+
       // Get unread count and last message
       const [unreadCount, lastMessage] = await Promise.all([
         this.getUnreadCount(conversation.id, userId),
@@ -172,6 +190,7 @@ export class ChatService extends SupabaseService {
 
       return {
         ...conversation,
+        property_title: propertyTitle,
         unread_count: unreadCount,
         last_message: lastMessage,
       };
@@ -386,6 +405,9 @@ export class ChatService extends SupabaseService {
           content: input.content.trim(),
           is_read: false,
           message_type: input.message_type || 'user',
+          file_url: input.file_url,
+          file_name: input.file_name,
+          file_size: input.file_size,
         })
         .select(
           `
@@ -701,13 +723,17 @@ export class ChatService extends SupabaseService {
           senderId = conversationDetails.owner_id;
           break;
         case 'cancelled':
-          messageContent = 'La réservation a été annulée.';
+          messageContent = propertyTitle
+            ? `La réservation pour "${propertyTitle}" a été annulée.`
+            : 'La réservation a été annulée.';
           // For cancelled, determine who cancelled based on context
           // Default to owner for now
           senderId = conversationDetails.owner_id;
           break;
         default:
-          messageContent = `Le statut de la réservation a été mis à jour : ${status}`;
+          messageContent = propertyTitle
+            ? `Le statut de la réservation pour "${propertyTitle}" a été mis à jour : ${status}`
+            : `Le statut de la réservation a été mis à jour : ${status}`;
           senderId = conversationDetails.owner_id;
       }
 

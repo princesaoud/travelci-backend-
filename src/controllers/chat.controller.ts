@@ -1,10 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import { chatService } from '../services/chat.service';
+import { fileService } from '../services/file.service';
 import { CreateConversationInput, CreateMessageInput } from '../models/Chat.model';
 import { sendSuccess, sendPaginatedSuccess, sendError } from '../utils/responses';
 import { NotFoundException, ValidationException, BusinessRuleException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { cacheService } from '../utils/cache';
+import multer from 'multer';
+
+/**
+ * Configure multer for message file uploads
+ */
+const messageFileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20MB
+  },
+});
 
 /**
  * Get conversations
@@ -190,6 +202,10 @@ export const sendMessage = async (
     const { id } = req.params;
     const input: CreateMessageInput = {
       content: req.body.content,
+      message_type: req.body.message_type,
+      file_url: req.body.file_url,
+      file_name: req.body.file_name,
+      file_size: req.body.file_size ? parseInt(req.body.file_size, 10) : undefined,
     };
 
     const message = await chatService.sendMessage(
@@ -279,6 +295,73 @@ export const getUnreadCount = async (
       return;
     }
     logger.error('Get unread count controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Upload file for a message
+ */
+export const uploadMessageFile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendError(res, 'Non authentifié', 'UNAUTHORIZED', 401);
+      return;
+    }
+
+    if (!req.file) {
+      sendError(res, 'Aucun fichier fourni', 'VALIDATION_ERROR', 400);
+      return;
+    }
+
+    const { id: conversationId } = req.params;
+    if (!conversationId) {
+      sendError(res, 'ID de conversation requis', 'VALIDATION_ERROR', 400);
+      return;
+    }
+
+    // Verify user has access to this conversation
+    await chatService.getConversationById(
+      conversationId,
+      req.user.userId,
+      req.user.role
+    );
+
+    // Generate a temporary message ID for file path
+    const tempMessageId = `temp-${Date.now()}`;
+
+    // Upload file
+    const fileUrl = await fileService.uploadFile(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      conversationId,
+      tempMessageId
+    );
+
+    sendSuccess(
+      res,
+      {
+        file_url: fileUrl,
+        file_name: req.file.originalname,
+        file_size: req.file.size,
+      },
+      'Fichier téléchargé avec succès'
+    );
+  } catch (error: any) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof ValidationException ||
+      error instanceof BusinessRuleException
+    ) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Upload message file controller error', { error: error.message });
     next(error);
   }
 };
