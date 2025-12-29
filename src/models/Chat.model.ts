@@ -61,6 +61,8 @@ export interface ConversationWithDetails extends Conversation {
   };
   last_message?: Message;
   unread_count?: number;
+  property_title?: string;
+  booking_start_date?: string;
 }
 
 /**

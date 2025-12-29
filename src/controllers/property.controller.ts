@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { propertyService } from '../services/property.service';
+import { bookingService } from '../services/booking.service';
 import { imageService } from '../services/image.service';
 import { CreatePropertyInput, UpdatePropertyInput, PropertyFilters } from '../models/Property.model';
 import { sendSuccess, sendPaginatedSuccess, sendError, calculatePagination } from '../utils/responses';
@@ -250,6 +251,35 @@ export const deleteProperty = async (
       return;
     }
     logger.error('Delete property controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Get bookings for a property (for availability check)
+ * Returns only accepted and pending bookings to show unavailable dates
+ */
+export const getPropertyBookings = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Verify property exists
+    await propertyService.getPropertyById(id);
+
+    // Get bookings for this property (accepted and pending only)
+    const bookings = await bookingService.getPropertyBookings(id);
+    
+    sendSuccess(res, { bookings }, 'Réservations récupérées avec succès');
+  } catch (error: any) {
+    if (error instanceof NotFoundException || error instanceof BusinessRuleException) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Get property bookings controller error', { error: error.message });
     next(error);
   }
 };

@@ -44,6 +44,8 @@ export class ChatService extends SupabaseService {
             client:users!conversations_client_id_fkey(id, full_name, email),
             owner:users!conversations_owner_id_fkey(id, full_name, email),
             booking:bookings!conversations_booking_id_fkey(
+              start_date,
+              end_date,
               property:properties!bookings_property_id_fkey(id, title)
             )
           `
@@ -62,6 +64,8 @@ export class ChatService extends SupabaseService {
             client:users!conversations_client_id_fkey(id, full_name, email),
             owner:users!conversations_owner_id_fkey(id, full_name, email),
             booking:bookings!conversations_booking_id_fkey(
+              start_date,
+              end_date,
               property:properties!bookings_property_id_fkey(id, title)
             )
           `
@@ -80,6 +84,8 @@ export class ChatService extends SupabaseService {
             client:users!conversations_client_id_fkey(id, full_name, email),
             owner:users!conversations_owner_id_fkey(id, full_name, email),
             booking:bookings!conversations_booking_id_fkey(
+              start_date,
+              end_date,
               property:properties!bookings_property_id_fkey(id, title)
             )
           `
@@ -146,6 +152,8 @@ export class ChatService extends SupabaseService {
           client:users!conversations_client_id_fkey(id, full_name, email),
           owner:users!conversations_owner_id_fkey(id, full_name, email),
           booking:bookings!conversations_booking_id_fkey(
+            start_date,
+            end_date,
             property:properties!bookings_property_id_fkey(id, title)
           )
         `
@@ -176,10 +184,14 @@ export class ChatService extends SupabaseService {
         }
       }
 
-      // Extract property title from booking relation
+      // Extract property title and booking dates from booking relation
       let propertyTitle: string | undefined;
+      let bookingStartDate: string | undefined;
       if (conversation.booking?.property?.title) {
         propertyTitle = conversation.booking.property.title;
+      }
+      if (conversation.booking?.start_date) {
+        bookingStartDate = conversation.booking.start_date;
       }
 
       // Get unread count and last message
@@ -191,6 +203,7 @@ export class ChatService extends SupabaseService {
       return {
         ...conversation,
         property_title: propertyTitle,
+        booking_start_date: bookingStartDate,
         unread_count: unreadCount,
         last_message: lastMessage,
       };

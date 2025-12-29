@@ -7,6 +7,7 @@ import {
   createProperty,
   updateProperty,
   deleteProperty,
+  getPropertyBookings,
   upload,
 } from '../controllers/property.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -146,6 +147,48 @@ router.get(
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
   cacheMiddleware(600), // 10 minutes cache
   getPropertyById
+);
+
+/**
+ * @swagger
+ * /api/properties/{id}/bookings:
+ *   get:
+ *     summary: Obtenir les réservations d'une propriété (pour vérifier la disponibilité)
+ *     description: Récupère les réservations acceptées et en attente d'une propriété pour afficher les dates occupées
+ *     tags: [Properties]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la propriété
+ *     responses:
+ *       200:
+ *         description: Liste des réservations de la propriété
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         bookings:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Booking'
+ *       404:
+ *         description: Propriété non trouvée
+ */
+router.get(
+  '/:id/bookings',
+  validateParams([param('id').isUUID().withMessage('ID invalide')]),
+  cacheMiddleware(60), // 1 minute cache (availability changes frequently)
+  getPropertyBookings
 );
 
 /**

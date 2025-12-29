@@ -256,6 +256,40 @@ export class BookingService extends SupabaseService {
   }
 
   /**
+   * Get bookings for a specific property (for availability check)
+   * Returns only accepted and pending bookings to show unavailable dates
+   * This is public information - anyone can check property availability
+   */
+  async getPropertyBookings(propertyId: string): Promise<Booking[]> {
+    try {
+      const { data, error } = await this.client
+        .from('bookings')
+        .select('*')
+        .eq('property_id', propertyId)
+        .in('status', ['pending', 'accepted'])
+        .order('start_date', { ascending: true });
+
+      if (error) {
+        throw new InfrastructureException(
+          `Erreur lors de la récupération des réservations de la propriété: ${error.message}`,
+          error
+        );
+      }
+
+      return (data as Booking[]) || [];
+    } catch (error: any) {
+      if (error instanceof InfrastructureException) {
+        throw error;
+      }
+      logger.error('Get property bookings error', { error: error.message, propertyId });
+      throw new BusinessRuleException(
+        'Erreur lors de la récupération des réservations de la propriété',
+        error
+      );
+    }
+  }
+
+  /**
    * Cancel booking
    */
   async cancelBooking(id: string, userId: string, userRole: string): Promise<void> {
