@@ -1100,15 +1100,74 @@ export class ChatService extends SupabaseService {
         return;
       }
 
+      // Get booking details for pending status to include in message
+      let bookingDetails: any = null;
+      let clientName: string | null = null;
+      
+      if (status === 'pending') {
+        try {
+          // Get booking with client info
+          const bookingResult = await this.client
+            .from('bookings')
+            .select(`
+              *,
+              client:users!bookings_client_id_fkey(id, full_name)
+            `)
+            .eq('id', bookingId)
+            .single();
+
+          if (bookingResult.data) {
+            bookingDetails = bookingResult.data;
+            if (bookingDetails.client && typeof bookingDetails.client === 'object') {
+              clientName = bookingDetails.client.full_name || null;
+            }
+          }
+        } catch (error: any) {
+          logger.warn('Failed to fetch booking details for system message', {
+            bookingId,
+            error: error.message,
+          });
+        }
+      }
+
       // Create appropriate message based on status
       let messageContent = '';
       let senderId = conversationDetails.owner_id; // Default to owner for system messages
 
       switch (status) {
         case 'pending':
-          messageContent = propertyTitle
-            ? `Une nouvelle réservation pour "${propertyTitle}" a été créée et est en attente de confirmation.`
-            : 'Une nouvelle réservation a été créée et est en attente de confirmation.';
+          if (bookingDetails && propertyTitle) {
+            // Format dates
+            const startDate = new Date(bookingDetails.start_date);
+            const endDate = new Date(bookingDetails.end_date);
+            const formattedStartDate = startDate.toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+            const formattedEndDate = endDate.toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            });
+            
+            // Format total price
+            const formattedPrice = new Intl.NumberFormat('fr-FR', {
+              style: 'currency',
+              currency: 'EUR',
+              minimumFractionDigits: 0,
+            }).format(bookingDetails.total_price || 0);
+            
+            // Build message with all details
+            const clientInfo = clientName ? ` par ${clientName}` : '';
+            messageContent = `Une nouvelle réservation pour "${propertyTitle}"${clientInfo} a été créée et est en attente de confirmation.\n\n` +
+              `📅 Dates: du ${formattedStartDate} au ${formattedEndDate}\n` +
+              `💰 Montant total: ${formattedPrice}`;
+          } else {
+            messageContent = propertyTitle
+              ? `Une nouvelle réservation pour "${propertyTitle}" a été créée et est en attente de confirmation.`
+              : 'Une nouvelle réservation a été créée et est en attente de confirmation.';
+          }
           senderId = conversationDetails.client_id; // Client creates the booking
           break;
         case 'accepted':
