@@ -396,11 +396,6 @@ router.get(
  *       401:
  *         description: Non authentifié
  */
-const messageFileUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
-});
-
 router.post(
   '/:id/upload-file',
   authenticate,

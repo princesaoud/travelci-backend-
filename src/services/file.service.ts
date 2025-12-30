@@ -23,7 +23,6 @@ export class FileService {
 
       // Generate unique file path
       const timestamp = Date.now();
-      const fileExtension = fileName.split('.').pop() || '';
       const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
       const path = `conversations/${conversationId}/${messageId}-${timestamp}-${sanitizedFileName}`;
 

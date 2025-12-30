@@ -6,17 +6,6 @@ import { sendSuccess, sendPaginatedSuccess, sendError } from '../utils/responses
 import { NotFoundException, ValidationException, BusinessRuleException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { cacheService } from '../utils/cache';
-import multer from 'multer';
-
-/**
- * Configure multer for message file uploads
- */
-const messageFileUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB
-  },
-});
 
 /**
  * Get conversations
