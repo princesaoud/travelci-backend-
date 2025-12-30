@@ -325,9 +325,14 @@ export const sendMessageByConversationId = async (
       fileName = req.body.file_name.trim();
     }
     if (req.body.file_size != null) {
-      const parsedSize = parseInt(req.body.file_size, 10);
-      if (!isNaN(parsedSize) && parsedSize > 0) {
-        fileSize = parsedSize;
+      // Handle both string and number types
+      if (typeof req.body.file_size === 'number') {
+        fileSize = req.body.file_size > 0 ? req.body.file_size : undefined;
+      } else if (typeof req.body.file_size === 'string') {
+        const parsedSize = parseInt(req.body.file_size, 10);
+        if (!isNaN(parsedSize) && parsedSize > 0) {
+          fileSize = parsedSize;
+        }
       }
     }
 
