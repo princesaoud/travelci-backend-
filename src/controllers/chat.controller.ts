@@ -313,12 +313,30 @@ export const sendMessageByConversationId = async (
       return;
     }
 
+    // Process file fields - only include if they have valid values
+    let fileUrl: string | undefined = undefined;
+    let fileName: string | undefined = undefined;
+    let fileSize: number | undefined = undefined;
+
+    if (req.body.file_url && typeof req.body.file_url === 'string' && req.body.file_url.trim().length > 0) {
+      fileUrl = req.body.file_url.trim();
+    }
+    if (req.body.file_name && typeof req.body.file_name === 'string' && req.body.file_name.trim().length > 0) {
+      fileName = req.body.file_name.trim();
+    }
+    if (req.body.file_size != null) {
+      const parsedSize = parseInt(req.body.file_size, 10);
+      if (!isNaN(parsedSize) && parsedSize > 0) {
+        fileSize = parsedSize;
+      }
+    }
+
     const input: CreateMessageInput = {
       content: req.body.content || '', // Ensure content is always a string, even if empty
       message_type: req.body.message_type,
-      file_url: req.body.file_url || undefined, // Convert empty string to undefined
-      file_name: req.body.file_name || undefined, // Convert empty string to undefined
-      file_size: req.body.file_size ? parseInt(req.body.file_size, 10) : undefined,
+      file_url: fileUrl,
+      file_name: fileName,
+      file_size: fileSize,
     };
 
     logger.debug('Send message controller - Input received', {
@@ -328,6 +346,15 @@ export const sendMessageByConversationId = async (
       hasFileName: !!input.file_name,
       hasFileSize: input.file_size !== undefined,
       contentLength: input.content?.length || 0,
+      fileUrl: input.file_url,
+      fileName: input.file_name,
+      fileSize: input.file_size,
+      rawBody: {
+        file_url: req.body.file_url,
+        file_name: req.body.file_name,
+        file_size: req.body.file_size,
+        content: req.body.content,
+      },
     });
 
     const message = await chatService.sendMessage(
