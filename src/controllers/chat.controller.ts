@@ -314,7 +314,7 @@ export const sendMessageByConversationId = async (
     }
 
     const input: CreateMessageInput = {
-      content: req.body.content,
+      content: req.body.content || '', // Ensure content is always a string, even if empty
       message_type: req.body.message_type,
       file_url: req.body.file_url,
       file_name: req.body.file_name,

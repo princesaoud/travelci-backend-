@@ -21,6 +21,31 @@ export class FileService {
     try {
       const supabase = getSupabaseServiceClient();
 
+      // Check if bucket exists, if not, try to create it
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      if (listError) {
+        logger.warn('Error listing buckets', { error: listError.message });
+      } else {
+        const bucketExists = buckets?.some((bucket) => bucket.id === this.bucketName);
+        if (!bucketExists) {
+          logger.warn(`Bucket ${this.bucketName} does not exist, attempting to create it`);
+          // Try to create the bucket
+          const { error: createError } = await supabase.storage.createBucket(this.bucketName, {
+            public: true,
+            fileSizeLimit: 20971520, // 20MB
+            allowedMimeTypes: null, // Allow all file types
+          });
+          if (createError) {
+            logger.error('Failed to create bucket', { error: createError.message });
+            throw new InfrastructureException(
+              `Le bucket de stockage n'existe pas. Veuillez exécuter la migration 009_create_message_files_bucket.sql dans Supabase.`,
+              createError
+            );
+          }
+          logger.info(`Bucket ${this.bucketName} created successfully`);
+        }
+      }
+
       // Generate unique file path
       const timestamp = Date.now();
       const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -34,6 +59,13 @@ export class FileService {
         });
 
       if (error) {
+        // Provide more helpful error message for bucket not found
+        if (error.message?.includes('Bucket not found') || error.message?.includes('not found')) {
+          throw new InfrastructureException(
+            `Le bucket de stockage '${this.bucketName}' n'existe pas. Veuillez exécuter la migration 009_create_message_files_bucket.sql dans le dashboard Supabase.`,
+            error
+          );
+        }
         throw error;
       }
 

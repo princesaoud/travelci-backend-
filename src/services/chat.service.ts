@@ -602,22 +602,41 @@ export class ChatService extends SupabaseService {
       // Verify user has access to this conversation
       await this.getConversationById(conversationId, senderId, userRole);
 
-      // Validate content
-      if (!input.content || input.content.trim().length === 0) {
-        throw new ValidationException('Le contenu du message ne peut pas être vide');
+      // Validate content - allow empty content if file is attached
+      const hasFile = !!(input.file_url && input.file_name);
+      const hasContent = !!(input.content && typeof input.content === 'string' && input.content.trim().length > 0);
+      
+      logger.debug('Sending message', {
+        conversationId,
+        senderId,
+        userRole,
+        hasContent,
+        hasFile,
+        contentLength: input.content?.length || 0,
+        contentType: typeof input.content,
+        contentValue: input.content,
+      });
+      
+      if (!hasContent && !hasFile) {
+        throw new ValidationException('Le message doit contenir du texte ou un fichier');
       }
 
-      if (input.content.length > 5000) {
+      if (hasContent && input.content.length > 5000) {
         throw new ValidationException('Le message ne peut pas dépasser 5000 caractères');
       }
 
       // Create message
+      // Use file name as content if content is empty but file exists
+      const messageContent = hasContent 
+        ? input.content.trim() 
+        : (hasFile ? (input.file_name || 'Fichier joint') : '');
+
       const { data, error } = await this.client
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: senderId,
-          content: input.content.trim(),
+          content: messageContent,
           is_read: false,
           message_type: input.message_type || 'user',
           file_url: input.file_url,
@@ -651,7 +670,17 @@ export class ChatService extends SupabaseService {
       ) {
         throw error;
       }
-      logger.error('Send message error', { error: error.message, conversationId, senderId });
+      logger.error('Send message error', { 
+        error: error.message,
+        errorStack: error.stack,
+        conversationId, 
+        senderId,
+        input: {
+          hasContent: !!(input.content && input.content.trim().length > 0),
+          hasFile: !!(input.file_url && input.file_name),
+          contentLength: input.content?.length || 0,
+        }
+      });
       throw new BusinessRuleException('Erreur lors de l\'envoi du message', error);
     }
   }
