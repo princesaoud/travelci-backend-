@@ -606,7 +606,32 @@ export class ChatService extends SupabaseService {
       });
 
       // Verify user has access to this conversation
-      await this.getConversationById(conversationId, senderId, userRole);
+      try {
+        await this.getConversationById(conversationId, senderId, userRole);
+        logger.debug('Send message - Step 1: Conversation access verified', {
+          conversationId,
+          senderId,
+        });
+      } catch (error: any) {
+        if (error instanceof NotFoundException || error instanceof ValidationException) {
+          logger.warn('Send message - Access denied or conversation not found', {
+            conversationId,
+            senderId,
+            userRole,
+            errorType: error.constructor.name,
+            errorMessage: error.message,
+          });
+          throw error;
+        }
+        logger.error('Send message - Error verifying conversation access', {
+          conversationId,
+          senderId,
+          userRole,
+          error: error.message,
+          errorStack: error.stack,
+        });
+        throw new BusinessRuleException('Erreur lors de la vérification de l\'accès à la conversation', error);
+      }
 
       logger.debug('Send message - Step 2: Validating content', {
         conversationId,
@@ -648,32 +673,76 @@ export class ChatService extends SupabaseService {
 
       // Create message
       // Use file name as content if content is empty but file exists
-      const messageContent = hasContent 
-        ? input.content.trim() 
-        : (hasFile ? (input.file_name || 'Fichier joint') : '');
+      // IMPORTANT: content must never be empty due to database CHECK constraint
+      let messageContent: string;
+      if (hasContent) {
+        messageContent = input.content.trim();
+      } else if (hasFile) {
+        // Use file name or default text if file_name is missing
+        messageContent = (input.file_name && input.file_name.trim().length > 0) 
+          ? input.file_name.trim() 
+          : 'Fichier joint';
+      } else {
+        // This should never happen due to validation above, but just in case
+        messageContent = 'Message';
+      }
+
+      // Final validation: ensure messageContent is not empty (database constraint)
+      if (!messageContent || messageContent.trim().length === 0) {
+        logger.error('Send message - messageContent is empty after processing', {
+          conversationId,
+          senderId,
+          hasContent,
+          hasFile,
+          inputContent: input.content,
+          inputFileName: input.file_name,
+        });
+        throw new ValidationException('Le contenu du message ne peut pas être vide');
+      }
 
       logger.debug('Send message - Step 4: Preparing database insert', {
         conversationId,
         senderId,
         messageContent,
         messageContentLength: messageContent.length,
+        messageContentTrimmedLength: messageContent.trim().length,
         fileUrl: input.file_url,
         fileName: input.file_name,
         fileSize: input.file_size,
       });
 
+      // Prepare insert data - only include file fields if they exist
+      const insertData: any = {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: messageContent,
+        is_read: false,
+        message_type: input.message_type || 'user',
+      };
+
+      // Only include file fields if they are provided (not null/undefined)
+      if (input.file_url) {
+        insertData.file_url = input.file_url;
+      }
+      if (input.file_name) {
+        insertData.file_name = input.file_name;
+      }
+      if (input.file_size !== undefined && input.file_size !== null) {
+        insertData.file_size = input.file_size;
+      }
+
+      logger.debug('Send message - Step 5: Database insert data', {
+        conversationId,
+        senderId,
+        insertDataKeys: Object.keys(insertData),
+        hasFileUrl: !!insertData.file_url,
+        hasFileName: !!insertData.file_name,
+        hasFileSize: insertData.file_size !== undefined,
+      });
+
       const { data, error } = await this.client
         .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: senderId,
-          content: messageContent,
-          is_read: false,
-          message_type: input.message_type || 'user',
-          file_url: input.file_url,
-          file_name: input.file_name,
-          file_size: input.file_size,
-        })
+        .insert(insertData)
         .select(
           `
           *,
