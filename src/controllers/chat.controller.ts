@@ -144,7 +144,7 @@ export const createConversation = async (
 };
 
 /**
- * Get messages for a conversation
+ * Get messages for a conversation (legacy route: /api/conversations/:id/messages)
  */
 export const getMessages = async (
   req: Request,
@@ -186,7 +186,72 @@ export const getMessages = async (
 };
 
 /**
- * Send a message
+ * Get messages for a conversation (new route: /api/messages?conversation_id=...)
+ */
+export const getMessagesByConversationId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    logger.info('getMessagesByConversationId called', { 
+      method: req.method,
+      url: req.originalUrl,
+      query: req.query 
+    });
+
+    if (!req.user) {
+      sendError(res, 'Non authentifié', 'UNAUTHORIZED', 401);
+      return;
+    }
+
+    const conversationId = req.query.conversation_id as string;
+    if (!conversationId) {
+      logger.warn('conversation_id missing in query', { query: req.query });
+      sendError(res, 'conversation_id est requis', 'VALIDATION_ERROR', 400);
+      return;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 100);
+
+    logger.debug('Fetching messages', { conversationId, page, limit, userId: req.user.userId });
+
+    const result = await chatService.getMessages(
+      conversationId,
+      req.user.userId,
+      req.user.role,
+      page,
+      limit
+    );
+
+    logger.info('Messages fetched successfully', { 
+      conversationId, 
+      messageCount: result.messages.length 
+    });
+
+    sendPaginatedSuccess(
+      res,
+      result.messages,
+      result.pagination,
+      'Messages récupérés avec succès'
+    );
+  } catch (error: any) {
+    if (error instanceof NotFoundException || error instanceof ValidationException) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Get messages by conversation_id controller error', { 
+      error: error.message,
+      stack: error.stack,
+      conversationId: req.query.conversation_id
+    });
+    next(error);
+  }
+};
+
+/**
+ * Send a message (legacy route: /api/conversations/:id/messages)
  */
 export const sendMessage = async (
   req: Request,
@@ -235,6 +300,65 @@ export const sendMessage = async (
       return;
     }
     logger.error('Send message controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Send a message (new route: /api/messages with conversation_id in body)
+ */
+export const sendMessageByConversationId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendError(res, 'Non authentifié', 'UNAUTHORIZED', 401);
+      return;
+    }
+
+    const conversationId = req.body.conversation_id as string;
+    if (!conversationId) {
+      sendError(res, 'conversation_id est requis', 'VALIDATION_ERROR', 400);
+      return;
+    }
+
+    const input: CreateMessageInput = {
+      content: req.body.content,
+      message_type: req.body.message_type,
+      file_url: req.body.file_url,
+      file_name: req.body.file_name,
+      file_size: req.body.file_size ? parseInt(req.body.file_size, 10) : undefined,
+    };
+
+    const message = await chatService.sendMessage(
+      conversationId,
+      input,
+      req.user.userId,
+      req.user.role
+    );
+
+    // Invalidate conversations cache for both participants
+    const conversation = await chatService.getConversationById(
+      conversationId,
+      req.user.userId,
+      req.user.role
+    );
+    await cacheService.deletePattern(`cache:conversations:${conversation.client_id}:*`);
+    await cacheService.deletePattern(`cache:conversations:${conversation.owner_id}:*`);
+
+    sendSuccess(res, { message }, 'Message envoyé avec succès', 201);
+  } catch (error: any) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof ValidationException ||
+      error instanceof BusinessRuleException
+    ) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Send message by conversation_id controller error', { error: error.message });
     next(error);
   }
 };

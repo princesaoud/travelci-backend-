@@ -7,6 +7,8 @@ import {
   createConversation,
   getMessages,
   sendMessage,
+  getMessagesByConversationId,
+  sendMessageByConversationId,
   markMessageAsRead,
   getUnreadCount,
   uploadMessageFile,
@@ -411,6 +413,113 @@ export default router;
 
 // Separate router for messages endpoints (mounted at /api/messages)
 export const messageRouter = Router();
+
+// IMPORTANT: Define specific routes BEFORE parameterized routes
+// Routes are matched in order, so /:id/read must come AFTER / and /read
+
+/**
+ * @swagger
+ * /api/messages:
+ *   get:
+ *     summary: Obtenir les messages d'une conversation
+ *     description: Récupère les messages d'une conversation avec pagination (utilise conversation_id en query param)
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: conversation_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID de la conversation
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Numéro de page
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *         description: Nombre de messages par page
+ *     responses:
+ *       200:
+ *         description: Liste des messages
+ *       401:
+ *         description: Non authentifié
+ *       404:
+ *         description: Conversation non trouvée
+ */
+messageRouter.get(
+  '/',
+  authenticate,
+  validateQuery([
+    query('conversation_id').isUUID().withMessage('conversation_id invalide'),
+    query('page').optional().isInt({ min: 1 }).withMessage('Numéro de page invalide'),
+    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limite invalide (1-100)'),
+  ]),
+  getMessagesByConversationId
+);
+
+/**
+ * @swagger
+ * /api/messages:
+ *   post:
+ *     summary: Envoyer un message
+ *     description: Envoie un nouveau message dans une conversation (utilise conversation_id dans le body)
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - conversation_id
+ *               - content
+ *             properties:
+ *               conversation_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID de la conversation
+ *               content:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 5000
+ *                 example: Bonjour, je suis intéressé par votre propriété.
+ *     responses:
+ *       201:
+ *         description: Message envoyé avec succès
+ *       400:
+ *         description: Erreur de validation
+ *       401:
+ *         description: Non authentifié
+ *       404:
+ *         description: Conversation non trouvée
+ */
+messageRouter.post(
+  '/',
+  authenticate,
+  validateBody([
+    body('conversation_id').isUUID().withMessage('conversation_id invalide'),
+    body('content')
+      .trim()
+      .notEmpty()
+      .withMessage('Le contenu du message est requis')
+      .isLength({ max: 5000 })
+      .withMessage('Le message ne peut pas dépasser 5000 caractères'),
+  ]),
+  sendMessageByConversationId
+);
 
 /**
  * @swagger

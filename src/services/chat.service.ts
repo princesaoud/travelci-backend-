@@ -46,7 +46,7 @@ export class ChatService extends SupabaseService {
             booking:bookings!conversations_booking_id_fkey(
               start_date,
               end_date,
-              property:properties!bookings_property_id_fkey(id, title)
+              property:properties!bookings_property_id_fkey(id, title, type)
             )
           `
           )
@@ -66,7 +66,7 @@ export class ChatService extends SupabaseService {
             booking:bookings!conversations_booking_id_fkey(
               start_date,
               end_date,
-              property:properties!bookings_property_id_fkey(id, title)
+              property:properties!bookings_property_id_fkey(id, title, type)
             )
           `
           )
@@ -86,7 +86,7 @@ export class ChatService extends SupabaseService {
             booking:bookings!conversations_booking_id_fkey(
               start_date,
               end_date,
-              property:properties!bookings_property_id_fkey(id, title)
+              property:properties!bookings_property_id_fkey(id, title, type)
             )
           `
           )
@@ -114,8 +114,88 @@ export class ChatService extends SupabaseService {
             this.getLastMessage(conv.id),
           ]);
 
+          // Extract property title and booking start date from booking relation
+          let propertyTitle: string | undefined;
+          let bookingStartDate: string | undefined;
+          
+          const bookingData = (conv as any).booking;
+          if (bookingData) {
+            // Try multiple ways to access property title (handle different Supabase response formats)
+            if (bookingData.property) {
+              // Format 1: booking.property.title (nested object)
+              if (typeof bookingData.property === 'object' && !Array.isArray(bookingData.property)) {
+                // Make sure we use 'title' and NOT 'type'
+                if (bookingData.property.title) {
+                  propertyTitle = bookingData.property.title;
+                  // Double check: if title is actually a type value, log warning
+                  if (propertyTitle === 'apartment' || propertyTitle === 'villa') {
+                    logger.error('Property title appears to be a type value instead of title!', { 
+                      conversationId: conv.id,
+                      propertyTitle: propertyTitle,
+                      propertyType: bookingData.property.type,
+                      propertyData: bookingData.property
+                    });
+                  } else {
+                    logger.debug('Extracted property title from booking.property.title', { 
+                      conversationId: conv.id,
+                      propertyTitle: propertyTitle
+                    });
+                  }
+                } else if (bookingData.property.type) {
+                  // If title is missing but type exists, this is a problem
+                  logger.error('Property title is missing but type exists - using type as fallback (THIS IS WRONG)', { 
+                    conversationId: conv.id,
+                    propertyType: bookingData.property.type,
+                    propertyKeys: Object.keys(bookingData.property)
+                  });
+                  // DO NOT use type - this is wrong
+                  propertyTitle = undefined;
+                } else {
+                  logger.warn('Property title field is missing in booking.property', { 
+                    conversationId: conv.id,
+                    propertyKeys: Object.keys(bookingData.property),
+                    propertyData: bookingData.property
+                  });
+                }
+              }
+              // Format 2: booking.property might be an array (Supabase sometimes returns arrays)
+              else if (Array.isArray(bookingData.property) && bookingData.property.length > 0) {
+                const firstProperty = bookingData.property[0];
+                if (firstProperty && firstProperty.title) {
+                  propertyTitle = firstProperty.title;
+                  logger.debug('Extracted property title from booking.property[0].title', { 
+                    conversationId: conv.id,
+                    propertyTitle: propertyTitle
+                  });
+                } else {
+                  logger.warn('Property title field is missing in booking.property[0]', { 
+                    conversationId: conv.id,
+                    propertyKeys: firstProperty ? Object.keys(firstProperty) : []
+                  });
+                }
+              }
+            }
+            
+            // Log warning if property title is still missing
+            if (!propertyTitle) {
+              logger.warn('Property title not found in booking data', { 
+                conversationId: conv.id,
+                bookingId: bookingData.id,
+                hasBooking: !!bookingData,
+                hasProperty: !!bookingData.property,
+                bookingStructure: JSON.stringify(bookingData, null, 2)
+              });
+            }
+            
+            if (bookingData.start_date) {
+              bookingStartDate = bookingData.start_date;
+            }
+          }
+
           return {
             ...conv,
+            property_title: propertyTitle,
+            booking_start_date: bookingStartDate,
             unread_count: unreadCount,
             last_message: lastMessage,
           };
@@ -154,7 +234,7 @@ export class ChatService extends SupabaseService {
           booking:bookings!conversations_booking_id_fkey(
             start_date,
             end_date,
-            property:properties!bookings_property_id_fkey(id, title)
+            property:properties!bookings_property_id_fkey(id, title, type)
           )
         `
         )
@@ -187,11 +267,79 @@ export class ChatService extends SupabaseService {
       // Extract property title and booking dates from booking relation
       let propertyTitle: string | undefined;
       let bookingStartDate: string | undefined;
-      if (conversation.booking?.property?.title) {
-        propertyTitle = conversation.booking.property.title;
-      }
-      if (conversation.booking?.start_date) {
-        bookingStartDate = conversation.booking.start_date;
+      
+      const bookingData = conversation.booking;
+      if (bookingData) {
+        // Try multiple ways to access property title (handle different Supabase response formats)
+        if (bookingData.property) {
+          // Format 1: booking.property.title (nested object)
+          if (typeof bookingData.property === 'object' && !Array.isArray(bookingData.property)) {
+            // Make sure we use 'title' and NOT 'type'
+            if (bookingData.property.title) {
+              propertyTitle = bookingData.property.title;
+              // Double check: if title is actually a type value, log warning
+              if (propertyTitle === 'apartment' || propertyTitle === 'villa') {
+                logger.error('Property title appears to be a type value instead of title! (getConversationById)', { 
+                  conversationId: conversation.id,
+                  propertyTitle: propertyTitle,
+                  propertyType: bookingData.property.type,
+                  propertyData: bookingData.property
+                });
+              } else {
+                logger.debug('Extracted property title from booking.property.title in getConversationById', { 
+                  conversationId: conversation.id,
+                  propertyTitle: propertyTitle
+                });
+              }
+            } else if (bookingData.property.type) {
+              // If title is missing but type exists, this is a problem
+              logger.error('Property title is missing but type exists - using type as fallback (THIS IS WRONG) (getConversationById)', { 
+                conversationId: conversation.id,
+                propertyType: bookingData.property.type,
+                propertyKeys: Object.keys(bookingData.property)
+              });
+              // DO NOT use type - this is wrong
+              propertyTitle = undefined;
+            } else {
+              logger.warn('Property title field is missing in booking.property for getConversationById', { 
+                conversationId: conversation.id,
+                propertyKeys: Object.keys(bookingData.property),
+                propertyData: bookingData.property
+              });
+            }
+          }
+          // Format 2: booking.property might be an array (Supabase sometimes returns arrays)
+          else if (Array.isArray(bookingData.property) && bookingData.property.length > 0) {
+            const firstProperty = bookingData.property[0];
+            if (firstProperty && firstProperty.title) {
+              propertyTitle = firstProperty.title;
+              logger.debug('Extracted property title from booking.property[0].title in getConversationById', { 
+                conversationId: conversation.id,
+                propertyTitle: propertyTitle
+              });
+            } else {
+              logger.warn('Property title field is missing in booking.property[0] for getConversationById', { 
+                conversationId: conversation.id,
+                propertyKeys: firstProperty ? Object.keys(firstProperty) : []
+              });
+            }
+          }
+        }
+        
+        // Log warning if property title is still missing
+        if (!propertyTitle) {
+          logger.warn('Property title not found in booking data for conversation', { 
+            conversationId: conversation.id,
+            bookingId: bookingData.id,
+            hasBooking: !!bookingData,
+            hasProperty: !!bookingData.property,
+            bookingStructure: JSON.stringify(bookingData, null, 2)
+          });
+        }
+        
+        if (bookingData.start_date) {
+          bookingStartDate = bookingData.start_date;
+        }
       }
 
       // Get unread count and last message
@@ -272,7 +420,12 @@ export class ChatService extends SupabaseService {
           `
           *,
           client:users!conversations_client_id_fkey(id, full_name, email),
-          owner:users!conversations_owner_id_fkey(id, full_name, email)
+          owner:users!conversations_owner_id_fkey(id, full_name, email),
+          booking:bookings!conversations_booking_id_fkey(
+            start_date,
+            end_date,
+            property:properties!bookings_property_id_fkey(id, title, type)
+          )
         `
         )
         .single();
@@ -288,12 +441,61 @@ export class ChatService extends SupabaseService {
         throw new InfrastructureException('La conversation n\'a pas pu être créée');
       }
 
-      const conversation = data as ConversationWithDetails;
+      const conversation = data as any;
+
+      // Extract property title and booking start date from booking relation
+      let propertyTitle: string | undefined;
+      let bookingStartDate: string | undefined;
+      
+      const bookingData = conversation.booking;
+      if (bookingData) {
+        if (bookingData.property) {
+          if (typeof bookingData.property === 'object' && !Array.isArray(bookingData.property)) {
+            if (bookingData.property.title) {
+              propertyTitle = bookingData.property.title;
+              logger.debug('Property bound to conversation in createConversation', {
+                conversationId: conversation.id,
+                propertyId: bookingData.property.id,
+                propertyTitle: propertyTitle,
+                propertyType: bookingData.property.type,
+              });
+            }
+          } else if (Array.isArray(bookingData.property) && bookingData.property.length > 0) {
+            propertyTitle = bookingData.property[0].title;
+            logger.debug('Property bound to conversation in createConversation (array format)', {
+              conversationId: conversation.id,
+              propertyId: bookingData.property[0].id,
+              propertyTitle: propertyTitle,
+            });
+          }
+        }
+        
+        if (bookingData.start_date) {
+          bookingStartDate = bookingData.start_date;
+        }
+      }
+
+      if (!propertyTitle) {
+        logger.warn('Property title not found when creating conversation', {
+          conversationId: conversation.id,
+          bookingId: input.booking_id,
+          hasBooking: !!bookingData,
+          hasProperty: !!bookingData?.property,
+        });
+      }
+
+      // Get unread count and last message
+      const [unreadCount, lastMessage] = await Promise.all([
+        this.getUnreadCount(conversation.id, userId),
+        this.getLastMessage(conversation.id),
+      ]);
 
       return {
         ...conversation,
-        unread_count: 0,
-        last_message: undefined,
+        property_title: propertyTitle,
+        booking_start_date: bookingStartDate,
+        unread_count: unreadCount,
+        last_message: lastMessage,
       };
     } catch (error: any) {
       if (
@@ -612,12 +814,15 @@ export class ChatService extends SupabaseService {
         return;
       }
 
-      // Get booking to find property_id
+      // Get booking with property to find owner_id and ensure property is bound
       const booking = await this.executeQueryNullable<any>(
         async () =>
           await this.client
             .from('bookings')
-            .select('property_id')
+            .select(`
+              property_id,
+              property:properties!bookings_property_id_fkey(id, title, owner_id)
+            `)
             .eq('id', bookingId)
             .single()
       );
@@ -627,29 +832,54 @@ export class ChatService extends SupabaseService {
         return;
       }
 
-      // Get property to find owner_id
-      const property = await this.executeQueryNullable<any>(
-        async () =>
-          await this.client
-            .from('properties')
-            .select('owner_id')
-            .eq('id', booking.property_id)
-            .single()
-      );
-
-      if (!property) {
-        logger.warn('Property not found when creating conversation', {
-          bookingId,
-          propertyId: booking.property_id,
-        });
-        return;
+      // Extract property info - handle both object and array formats
+      let propertyOwnerId: string | undefined;
+      let propertyTitle: string | undefined;
+      
+      if (booking.property) {
+        if (typeof booking.property === 'object' && !Array.isArray(booking.property)) {
+          propertyOwnerId = booking.property.owner_id;
+          propertyTitle = booking.property.title;
+        } else if (Array.isArray(booking.property) && booking.property.length > 0) {
+          propertyOwnerId = booking.property[0].owner_id;
+          propertyTitle = booking.property[0].title;
+        }
       }
+
+      if (!propertyOwnerId) {
+        // Fallback: get property directly if not in relation
+        const property = await this.executeQueryNullable<any>(
+          async () =>
+            await this.client
+              .from('properties')
+              .select('owner_id, title')
+              .eq('id', booking.property_id)
+              .single()
+        );
+
+        if (!property) {
+          logger.warn('Property not found when creating conversation', {
+            bookingId,
+            propertyId: booking.property_id,
+          });
+          return;
+        }
+        propertyOwnerId = property.owner_id;
+        propertyTitle = property.title;
+      }
+
+      logger.info('Creating conversation with property binding', {
+        bookingId,
+        propertyId: booking.property_id,
+        propertyTitle: propertyTitle,
+        ownerId: propertyOwnerId,
+      });
 
       // Create conversation
       const { error } = await this.client.from('conversations').insert({
         booking_id: bookingId,
         client_id: clientId,
-        owner_id: property.owner_id,
+        owner_id: propertyOwnerId,
       });
 
       if (error) {
