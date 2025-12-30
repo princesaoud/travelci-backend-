@@ -599,29 +599,50 @@ export class ChatService extends SupabaseService {
     userRole: string
   ): Promise<MessageWithSender> {
     try {
+      logger.debug('Send message - Step 1: Verifying conversation access', {
+        conversationId,
+        senderId,
+        userRole,
+      });
+
       // Verify user has access to this conversation
       await this.getConversationById(conversationId, senderId, userRole);
+
+      logger.debug('Send message - Step 2: Validating content', {
+        conversationId,
+        hasFileUrl: !!input.file_url,
+        hasFileName: !!input.file_name,
+        hasContent: !!input.content,
+        contentType: typeof input.content,
+        contentValue: input.content,
+        contentLength: input.content?.length || 0,
+      });
 
       // Validate content - allow empty content if file is attached
       const hasFile = !!(input.file_url && input.file_name);
       const hasContent = !!(input.content && typeof input.content === 'string' && input.content.trim().length > 0);
       
-      logger.debug('Sending message', {
+      logger.debug('Send message - Step 3: Content validation result', {
         conversationId,
-        senderId,
-        userRole,
         hasContent,
         hasFile,
-        contentLength: input.content?.length || 0,
-        contentType: typeof input.content,
-        contentValue: input.content,
+        willProceed: hasContent || hasFile,
       });
       
       if (!hasContent && !hasFile) {
+        logger.warn('Send message - Validation failed: no content and no file', {
+          conversationId,
+          senderId,
+        });
         throw new ValidationException('Le message doit contenir du texte ou un fichier');
       }
 
       if (hasContent && input.content.length > 5000) {
+        logger.warn('Send message - Validation failed: content too long', {
+          conversationId,
+          senderId,
+          contentLength: input.content.length,
+        });
         throw new ValidationException('Le message ne peut pas dépasser 5000 caractères');
       }
 
@@ -630,6 +651,16 @@ export class ChatService extends SupabaseService {
       const messageContent = hasContent 
         ? input.content.trim() 
         : (hasFile ? (input.file_name || 'Fichier joint') : '');
+
+      logger.debug('Send message - Step 4: Preparing database insert', {
+        conversationId,
+        senderId,
+        messageContent,
+        messageContentLength: messageContent.length,
+        fileUrl: input.file_url,
+        fileName: input.file_name,
+        fileSize: input.file_size,
+      });
 
       const { data, error } = await this.client
         .from('messages')
@@ -652,6 +683,14 @@ export class ChatService extends SupabaseService {
         .single();
 
       if (error) {
+        logger.error('Send message - Database insert error', {
+          conversationId,
+          senderId,
+          error: error.message,
+          errorCode: error.code,
+          errorDetails: error.details,
+          errorHint: error.hint,
+        });
         throw new InfrastructureException(
           `Erreur lors de l'envoi du message: ${error.message}`,
           error
@@ -659,8 +698,18 @@ export class ChatService extends SupabaseService {
       }
 
       if (!data) {
+        logger.error('Send message - No data returned from insert', {
+          conversationId,
+          senderId,
+        });
         throw new InfrastructureException('Le message n\'a pas pu être créé');
       }
+
+      logger.debug('Send message - Success', {
+        conversationId,
+        senderId,
+        messageId: (data as any).id,
+      });
 
       return data as MessageWithSender;
     } catch (error: any) {
@@ -668,17 +717,28 @@ export class ChatService extends SupabaseService {
         error instanceof NotFoundException ||
         error instanceof ValidationException
       ) {
+        logger.debug('Send message - Re-throwing domain exception', {
+          conversationId,
+          senderId,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+        });
         throw error;
       }
-      logger.error('Send message error', { 
+      logger.error('Send message - Unexpected error', { 
         error: error.message,
         errorStack: error.stack,
+        errorName: error.name,
         conversationId, 
         senderId,
+        userRole,
         input: {
-          hasContent: !!(input.content && input.content.trim().length > 0),
+          hasContent: !!(input.content && typeof input.content === 'string' && input.content.trim().length > 0),
           hasFile: !!(input.file_url && input.file_name),
           contentLength: input.content?.length || 0,
+          fileUrl: input.file_url,
+          fileName: input.file_name,
+          fileSize: input.file_size,
         }
       });
       throw new BusinessRuleException('Erreur lors de l\'envoi du message', error);
