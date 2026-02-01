@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
+import { imageService } from '../services/image.service';
 import { CreateUserInput } from '../models/User.model';
 import { sendSuccess, sendError } from '../utils/responses';
 import { NotFoundException, ValidationException, BusinessRuleException } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 /**
- * Register a new user
+ * Register a new user (supports multipart for owner: national_id_front, national_id_back)
  */
 export const register = async (
   req: Request,
@@ -14,8 +15,41 @@ export const register = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const input: CreateUserInput = req.body;
+    const body = req.body as Record<string, string>;
+    const input: CreateUserInput = {
+      full_name: body.full_name,
+      email: body.email,
+      password: body.password,
+      phone: body.phone || undefined,
+      role: (body.role as 'client' | 'owner' | 'admin') || 'client',
+    };
+
     const result = await authService.register(input);
+
+    if (result.user.role === 'owner' && req.files && typeof req.files === 'object') {
+      const files = req.files as { national_id_front?: Express.Multer.File[]; national_id_back?: Express.Multer.File[] };
+      let urlFront: string | undefined;
+      let urlBack: string | undefined;
+      try {
+        if (files.national_id_front?.[0]?.buffer) {
+          urlFront = await imageService.uploadIdDocument(result.user.id, files.national_id_front[0].buffer, 'front');
+        }
+        if (files.national_id_back?.[0]?.buffer) {
+          urlBack = await imageService.uploadIdDocument(result.user.id, files.national_id_back[0].buffer, 'back');
+        }
+        if (urlFront || urlBack) {
+          await authService.updateUserProfile(result.user.id, {
+            national_id_front_url: urlFront,
+            national_id_back_url: urlBack,
+          });
+          const updatedUser = await authService.getUserById(result.user.id);
+          result.user = updatedUser;
+        }
+      } catch (uploadErr: any) {
+        logger.warn('ID document upload failed during register', { error: uploadErr.message, userId: result.user.id });
+      }
+    }
+
     sendSuccess(res, result, 'Utilisateur enregistré avec succès', 201);
   } catch (error: any) {
     if (error instanceof ValidationException || error instanceof BusinessRuleException) {

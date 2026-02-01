@@ -8,6 +8,9 @@ import {
   updateProperty,
   deleteProperty,
   getPropertyBookings,
+  getBlockedDates,
+  addBlockedDates,
+  removeBlockedDates,
   upload,
 } from '../controllers/property.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
@@ -189,6 +192,29 @@ router.get(
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
   cacheMiddleware(60), // 1 minute cache (availability changes frequently)
   getPropertyBookings
+);
+
+router.get(
+  '/:id/blocked-dates',
+  authenticate,
+  validateParams([param('id').isUUID().withMessage('ID invalide')]),
+  getBlockedDates
+);
+
+router.post(
+  '/:id/blocked-dates',
+  authenticate,
+  requireRole('owner', 'admin'),
+  validateParams([param('id').isUUID().withMessage('ID invalide')]),
+  addBlockedDates
+);
+
+router.delete(
+  '/:id/blocked-dates',
+  authenticate,
+  requireRole('owner', 'admin'),
+  validateParams([param('id').isUUID().withMessage('ID invalide')]),
+  removeBlockedDates
 );
 
 /**

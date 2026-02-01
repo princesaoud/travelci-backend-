@@ -3,10 +3,11 @@
 -- Default password for all seed users: "password123"
 
 -- Insert sample users
+-- Password for all users: "password123"
 INSERT INTO users (id, full_name, email, phone, password_hash, role, is_verified) VALUES
-('00000000-0000-0000-0000-000000000001', 'John Doe', 'john@example.com', '+1234567890', '$2b$10$rOzJ8K8qK8qK8qK8qK8qKu8qK8qK8qK8qK8qK8qK8qK8qK8qK8qK', 'client', true),
-('00000000-0000-0000-0000-000000000002', 'Jane Owner', 'jane@example.com', '+1234567891', '$2b$10$rOzJ8K8qK8qK8qK8qK8qKu8qK8qK8qK8qK8qK8qK8qK8qK8qK8qK', 'owner', true),
-('00000000-0000-0000-0000-000000000003', 'Admin User', 'admin@example.com', '+1234567892', '$2b$10$rOzJ8K8qK8qK8qK8qK8qKu8qK8qK8qK8qK8qK8qK8qK8qK8qK8qK', 'admin', true)
+('00000000-0000-0000-0000-000000000001', 'John Doe', 'john@example.com', '+1234567890', '$2b$10$0oBGNf/on5kOZucCP9HzB.9T75g8y/96M1PyO38CAsrQdbwBSc7Jm', 'client', true),
+('00000000-0000-0000-0000-000000000002', 'Jane Owner', 'jane@example.com', '+1234567891', '$2b$10$0oBGNf/on5kOZucCP9HzB.9T75g8y/96M1PyO38CAsrQdbwBSc7Jm', 'owner', true),
+('00000000-0000-0000-0000-000000000003', 'Admin User', 'admin@example.com', '+1234567892', '$2b$10$0oBGNf/on5kOZucCP9HzB.9T75g8y/96M1PyO38CAsrQdbwBSc7Jm', 'admin', true)
 ON CONFLICT (email) DO NOTHING;
 
 -- Insert sample properties

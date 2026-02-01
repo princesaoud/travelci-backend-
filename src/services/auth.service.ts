@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { SupabaseService } from './supabase.service';
-import { User, CreateUserInput, UserResponse } from '../models/User.model';
+import { User, CreateUserInput, UserResponse, UpdateUserInput } from '../models/User.model';
 import { NotFoundException, ValidationException, UnauthorizedException, BusinessRuleException, InfrastructureException } from '../utils/errors';
 import { logger } from '../utils/logger';
 
@@ -69,6 +69,8 @@ export class AuthService extends SupabaseService {
           password_hash: passwordHash,
           role: input.role || 'client',
           is_verified: false,
+          national_id_front_url: input.national_id_front_url,
+          national_id_back_url: input.national_id_back_url,
         })
         .select();
       
@@ -207,6 +209,43 @@ export class AuthService extends SupabaseService {
       }
       logger.error('Get user error', { error: error.message, userId });
       throw new BusinessRuleException('Erreur lors de la récupération de l\'utilisateur', error);
+    }
+  }
+
+  /**
+   * Update user profile (e.g. national ID URLs)
+   */
+  async updateUserProfile(userId: string, input: UpdateUserInput): Promise<UserResponse> {
+    try {
+      const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (input.full_name !== undefined) updateData.full_name = input.full_name;
+      if (input.phone !== undefined) updateData.phone = input.phone;
+      if (input.is_verified !== undefined) updateData.is_verified = input.is_verified;
+      if (input.national_id_front_url !== undefined) updateData.national_id_front_url = input.national_id_front_url;
+      if (input.national_id_back_url !== undefined) updateData.national_id_back_url = input.national_id_back_url;
+
+      const { data, error } = await this.client
+        .from('users')
+        .update(updateData)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new InfrastructureException(`Erreur lors de la mise à jour du profil: ${error.message}`, error);
+      }
+      if (!data) {
+        throw new NotFoundException('Utilisateur non trouvé');
+      }
+
+      const { password_hash, ...userResponse } = data as User;
+      return userResponse as UserResponse;
+    } catch (error: any) {
+      if (error instanceof NotFoundException || error instanceof InfrastructureException) {
+        throw error;
+      }
+      logger.error('Update user profile error', { error: error.message, userId });
+      throw new BusinessRuleException('Erreur lors de la mise à jour du profil', error);
     }
   }
 

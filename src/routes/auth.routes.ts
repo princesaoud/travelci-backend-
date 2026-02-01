@@ -1,10 +1,23 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { body } from 'express-validator';
 import { register, login, getMe, logout } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validation.middleware';
 
 const router = Router();
+
+const registerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Seules les images sont autorisées pour la pièce d\'identité'));
+  },
+}).fields([
+  { name: 'national_id_front', maxCount: 1 },
+  { name: 'national_id_back', maxCount: 1 },
+]);
 
 /**
  * @swagger
@@ -71,6 +84,16 @@ const router = Router();
  */
 router.post(
   '/register',
+  (req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      registerUpload(req, res, (err) => {
+        if (err) next(err);
+        else next();
+      });
+    } else {
+      next();
+    }
+  },
   validateBody([
     body('full_name').trim().notEmpty().withMessage('Le nom complet est requis'),
     body('email').isEmail().withMessage('Email invalide'),

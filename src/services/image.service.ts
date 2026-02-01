@@ -77,6 +77,55 @@ export class ImageService {
   }
 
   /**
+   * Upload to a specific bucket (for ID documents)
+   */
+  private async uploadToBucket(
+    file: Buffer,
+    bucketName: string,
+    path: string,
+    contentType: string = 'image/webp'
+  ): Promise<string> {
+    try {
+      const supabase = getSupabaseServiceClient();
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(path, file, { contentType, upsert: true });
+
+      if (error) throw error;
+
+      const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(data.path);
+      if (!urlData?.publicUrl) throw new Error('Failed to get public URL');
+      return urlData.publicUrl;
+    } catch (error: any) {
+      logger.error('Supabase Storage upload error', { error: error.message, path, bucketName });
+      throw new InfrastructureException(
+        `Erreur lors du téléchargement: ${error.message}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Upload owner national ID document (front or back)
+   */
+  async uploadIdDocument(userId: string, file: Buffer, side: 'front' | 'back'): Promise<string> {
+    try {
+      const optimized = await sharp(file)
+        .resize(1200, 800, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
+      const path = `${userId}/${side}.webp`;
+      return await this.uploadToBucket(optimized, 'id-documents', path, 'image/webp');
+    } catch (error: any) {
+      logger.error('ID document upload error', { error: error.message, userId, side });
+      throw new InfrastructureException(
+        `Erreur lors du téléchargement de la pièce d'identité: ${error.message}`,
+        error
+      );
+    }
+  }
+
+  /**
    * Upload and optimize image with multiple sizes
    */
   async uploadAndOptimize(file: Buffer, propertyId: string): Promise<OptimizedImages> {

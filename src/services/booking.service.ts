@@ -4,6 +4,7 @@ import { NotFoundException, ValidationException, BusinessRuleException, Infrastr
 import { logger } from '../utils/logger';
 import { propertyService } from './property.service';
 import { chatService } from './chat.service';
+import { availabilityService } from './availability.service';
 
 /**
  * Booking service for booking management
@@ -151,6 +152,16 @@ export class BookingService extends SupabaseService {
 
       if (overlappingBookings && overlappingBookings.length > 0) {
         throw new BusinessRuleException('La propriété n\'est pas disponible pour ces dates');
+      }
+
+      // Check owner-defined blocked dates
+      const hasBlocked = await availabilityService.hasBlockedDatesInRange(
+        input.property_id,
+        input.start_date,
+        input.end_date
+      );
+      if (hasBlocked) {
+        throw new BusinessRuleException('La propriété n\'est pas disponible pour ces dates (dates bloquées par le propriétaire)');
       }
 
       // Calculate nights and total price

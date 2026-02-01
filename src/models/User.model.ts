@@ -9,6 +9,8 @@ export interface User {
   password_hash?: string;
   role: 'client' | 'owner' | 'admin';
   is_verified: boolean;
+  national_id_front_url?: string;
+  national_id_back_url?: string;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,8 @@ export interface CreateUserInput {
   phone?: string;
   password: string;
   role?: 'client' | 'owner' | 'admin';
+  national_id_front_url?: string;
+  national_id_back_url?: string;
 }
 
 /**
@@ -31,6 +35,8 @@ export interface UpdateUserInput {
   full_name?: string;
   phone?: string;
   is_verified?: boolean;
+  national_id_front_url?: string;
+  national_id_back_url?: string;
 }
 
 /**
@@ -43,6 +49,8 @@ export interface UserResponse {
   phone?: string;
   role: 'client' | 'owner' | 'admin';
   is_verified: boolean;
+  national_id_front_url?: string;
+  national_id_back_url?: string;
   created_at: string;
   updated_at: string;
 }

@@ -13,6 +13,7 @@ export interface Property {
   city: string;
   latitude?: number;
   longitude?: number;
+  room_count?: number; // 1=studio, 2=2 pièces, etc.
   image_urls: string[];
   amenities: string[];
   created_at: string;
@@ -48,6 +49,7 @@ export interface UpdatePropertyInput {
   city?: string;
   latitude?: number;
   longitude?: number;
+  room_count?: number;
   image_urls?: string[];
   amenities?: string[];
 }

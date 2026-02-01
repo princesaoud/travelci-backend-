@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { propertyService } from '../services/property.service';
 import { bookingService } from '../services/booking.service';
+import { availabilityService } from '../services/availability.service';
 import { imageService } from '../services/image.service';
 import { CreatePropertyInput, UpdatePropertyInput, PropertyFilters } from '../models/Property.model';
 import { sendSuccess, sendPaginatedSuccess, sendError, calculatePagination } from '../utils/responses';
@@ -128,6 +129,7 @@ export const createProperty = async (
       city: req.body.city,
       latitude: req.body.latitude ? parseFloat(req.body.latitude) : undefined,
       longitude: req.body.longitude ? parseFloat(req.body.longitude) : undefined,
+      room_count: req.body.room_count != null ? parseInt(req.body.room_count, 10) : undefined,
       amenities: req.body.amenities ? JSON.parse(req.body.amenities) : [],
     };
 
@@ -205,6 +207,7 @@ export const updateProperty = async (
       city: req.body.city,
       latitude: req.body.latitude ? parseFloat(req.body.latitude) : undefined,
       longitude: req.body.longitude ? parseFloat(req.body.longitude) : undefined,
+      room_count: req.body.room_count != null ? parseInt(req.body.room_count, 10) : undefined,
       amenities: req.body.amenities ? JSON.parse(req.body.amenities) : undefined,
     };
 
@@ -280,6 +283,89 @@ export const getPropertyBookings = async (
       return;
     }
     logger.error('Get property bookings controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Get blocked dates for a property (owner-defined unavailability)
+ */
+export const getBlockedDates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const property = await propertyService.getPropertyById(id);
+    if (req.user && req.user.role !== 'admin' && property.owner_id !== req.user.userId) {
+      sendError(res, 'Accès non autorisé', 'FORBIDDEN', 403);
+      return;
+    }
+    const dates = await availabilityService.getBlockedDates(id);
+    sendSuccess(res, { dates }, 'Dates bloquées récupérées avec succès');
+  } catch (error: any) {
+    if (error instanceof NotFoundException || error instanceof BusinessRuleException) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Get blocked dates controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Add blocked dates for a property (owner only)
+ */
+export const addBlockedDates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const property = await propertyService.getPropertyById(id);
+    if (req.user!.role !== 'admin' && property.owner_id !== req.user!.userId) {
+      sendError(res, 'Seul le propriétaire peut gérer la disponibilité', 'FORBIDDEN', 403);
+      return;
+    }
+    const dates = Array.isArray(req.body.dates) ? req.body.dates : (req.body.dates ? [req.body.dates] : []);
+    const added = await availabilityService.addBlockedDates(id, dates);
+    sendSuccess(res, { dates: added }, 'Dates bloquées ajoutées avec succès');
+  } catch (error: any) {
+    if (error instanceof NotFoundException || error instanceof ValidationException || error instanceof BusinessRuleException) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Add blocked dates controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
+ * Remove blocked dates for a property (owner only)
+ */
+export const removeBlockedDates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const property = await propertyService.getPropertyById(id);
+    if (req.user!.role !== 'admin' && property.owner_id !== req.user!.userId) {
+      sendError(res, 'Seul le propriétaire peut gérer la disponibilité', 'FORBIDDEN', 403);
+      return;
+    }
+    const dates = Array.isArray(req.body.dates) ? req.body.dates : (req.body.dates ? [req.body.dates] : []);
+    await availabilityService.removeBlockedDates(id, dates);
+    sendSuccess(res, null, 'Dates bloquées supprimées avec succès');
+  } catch (error: any) {
+    if (error instanceof NotFoundException || error instanceof BusinessRuleException) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Remove blocked dates controller error', { error: error.message });
     next(error);
   }
 };
