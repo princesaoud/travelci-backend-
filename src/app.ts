@@ -98,9 +98,7 @@ app.use(timingMiddleware);
 // Swagger documentation
 setupSwagger(app);
 
-// Rate limiting - Configurable via environment variables
-// Development: More lenient limits (20 requests per 15 min)
-// Production: Stricter limits (can be configured via env vars)
+// Rate limiting - Only limit login/register to avoid 429 on GET /me and other auth routes
 const authLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_AUTH_WINDOW_MS,
   max: env.RATE_LIMIT_AUTH_MAX,
@@ -108,8 +106,10 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for health checks and in test mode
-    return req.path === '/health' || req.path === '/' || process.env.NODE_ENV === 'test';
+    if (process.env.NODE_ENV === 'test') return true;
+    // Only rate limit POST /login and POST /register (req.path is relative to mount /api/auth)
+    const isLoginOrRegister = req.path === '/login' || req.path === '/register';
+    return !isLoginOrRegister;
   },
 });
 

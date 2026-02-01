@@ -42,7 +42,8 @@ export const env = {
   CORS_ORIGIN: process.env.CORS_ORIGIN || '',
 
   // Rate Limiting - Configurable via environment variables
-  RATE_LIMIT_AUTH_MAX: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '20', 10),
+  // Auth: 50 attempts per 15 min by default (avoids 429 during dev/hot restarts)
+  RATE_LIMIT_AUTH_MAX: parseInt(process.env.RATE_LIMIT_AUTH_MAX || '50', 10),
   RATE_LIMIT_AUTH_WINDOW_MS: parseInt(
     process.env.RATE_LIMIT_AUTH_WINDOW_MS || '900000',
     10

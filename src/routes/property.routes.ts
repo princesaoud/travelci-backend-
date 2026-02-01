@@ -195,14 +195,14 @@ router.get(
 );
 
 router.get(
-  '/:id/blocked-dates',
+  '/blocked-dates/:id',
   authenticate,
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
   getBlockedDates
 );
 
 router.post(
-  '/:id/blocked-dates',
+  '/blocked-dates/:id',
   authenticate,
   requireRole('owner', 'admin'),
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
@@ -210,7 +210,7 @@ router.post(
 );
 
 router.delete(
-  '/:id/blocked-dates',
+  '/blocked-dates/:id',
   authenticate,
   requireRole('owner', 'admin'),
   validateParams([param('id').isUUID().withMessage('ID invalide')]),
