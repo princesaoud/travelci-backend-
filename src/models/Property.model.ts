@@ -33,6 +33,7 @@ export interface CreatePropertyInput {
   city: string;
   latitude?: number;
   longitude?: number;
+  room_count?: number;
   amenities?: string[];
 }
 

@@ -1,5 +1,5 @@
 import { SupabaseService } from './supabase.service';
-import { NotFoundException, ValidationException, BusinessRuleException, InfrastructureException } from '../utils/errors';
+import { ValidationException, BusinessRuleException, InfrastructureException } from '../utils/errors';
 import { logger } from '../utils/logger';
 import { propertyService } from './property.service';
 
