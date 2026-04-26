@@ -35,6 +35,11 @@ export const env = {
   PORT: parseInt(process.env.PORT || '3000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
 
+  // Firebase Cloud Messaging (optional — push notifications disabled if not set)
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || '',
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY || '',
+
   // CORS - Comma-separated list of allowed origins
   // For Flutter web: include the Flutter dev server URL (e.g., http://localhost:xxxxx)
   // Mobile apps (iOS/Android) don't need CORS configuration

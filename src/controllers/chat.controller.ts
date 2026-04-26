@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { chatService } from '../services/chat.service';
 import { fileService } from '../services/file.service';
+import { fcmService } from '../services/fcm.service';
 import { CreateConversationInput, CreateMessageInput } from '../models/Chat.model';
 import { sendSuccess, sendPaginatedSuccess, sendError } from '../utils/responses';
 import { NotFoundException, ValidationException, BusinessRuleException } from '../utils/errors';
@@ -278,6 +279,25 @@ export const sendMessage = async (
     await cacheService.deletePattern(`cache:conversations:${conversation.client_id}:*`);
     await cacheService.deletePattern(`cache:conversations:${conversation.owner_id}:*`);
 
+    // Push notification to the other participant (fire-and-forget)
+    const recipientId =
+      req.user.userId === conversation.client_id
+        ? conversation.owner_id
+        : conversation.client_id;
+    const senderName = (req.user as any).full_name || 'Quelqu\'un';
+    const preview = (message.content || '').slice(0, 80);
+    fcmService
+      .sendToUser(recipientId, {
+        title: `Nouveau message de ${senderName}`,
+        body: preview || 'Nouveau fichier partagé',
+        data: {
+          type: 'message',
+          conversationId: id,
+          bookingId: conversation.booking_id ?? '',
+        },
+      })
+      .catch(() => {});
+
     sendSuccess(res, { message }, 'Message envoyé avec succès', 201);
   } catch (error: any) {
     if (
@@ -377,6 +397,25 @@ export const sendMessageByConversationId = async (
     );
     await cacheService.deletePattern(`cache:conversations:${conversation.client_id}:*`);
     await cacheService.deletePattern(`cache:conversations:${conversation.owner_id}:*`);
+
+    // Push notification to the other participant (fire-and-forget)
+    const recipientId =
+      req.user.userId === conversation.client_id
+        ? conversation.owner_id
+        : conversation.client_id;
+    const senderName = (req.user as any).full_name || 'Quelqu\'un';
+    const preview = (message.content || '').slice(0, 80);
+    fcmService
+      .sendToUser(recipientId, {
+        title: `Nouveau message de ${senderName}`,
+        body: preview || 'Nouveau fichier partagé',
+        data: {
+          type: 'message',
+          conversationId,
+          bookingId: conversation.booking_id ?? '',
+        },
+      })
+      .catch(() => {});
 
     sendSuccess(res, { message }, 'Message envoyé avec succès', 201);
   } catch (error: any) {

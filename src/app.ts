@@ -5,6 +5,7 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { validateEnv, env } from './config/env';
 import { initRedisConnection } from './config/redis';
+import { initFirebase } from './config/firebase';
 import { setupSwagger } from './config/swagger';
 import { errorHandler, notFoundHandler, requestIdMiddleware, timingMiddleware } from './middleware/error.middleware';
 import { logger } from './utils/logger';
@@ -15,6 +16,7 @@ import propertyRoutes from './routes/property.routes';
 import bookingRoutes from './routes/booking.routes';
 import imageRoutes from './routes/image.routes';
 import chatRoutes, { messageRouter } from './routes/chat.routes';
+import devicesRoutes from './routes/devices.routes';
 
 /**
  * Create Express app
@@ -38,6 +40,7 @@ try {
 
 // Initialize services
 initRedisConnection();
+initFirebase();
 
 // Security middleware
 app.use(helmet());
@@ -243,6 +246,7 @@ app.use('/api/bookings', checkEnvMiddleware, generalLimiter, bookingRoutes);
 app.use('/api/images', checkEnvMiddleware, imageUploadLimiter, imageRoutes);
 app.use('/api/conversations', checkEnvMiddleware, generalLimiter, chatRoutes);
 app.use('/api/messages', checkEnvMiddleware, generalLimiter, messageRouter);
+app.use('/api/devices', checkEnvMiddleware, generalLimiter, devicesRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

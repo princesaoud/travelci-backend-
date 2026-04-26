@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { propertyService } from './property.service';
 import { chatService } from './chat.service';
 import { availabilityService } from './availability.service';
+import { fcmService } from './fcm.service';
 
 /**
  * Booking service for booking management
@@ -188,24 +189,27 @@ export class BookingService extends SupabaseService {
             .single()
       );
 
-      // Auto-create conversation for this booking
-      // Use a fire-and-forget approach - don't let conversation creation failure break booking creation
+      // Auto-create conversation + system message (fire-and-forget)
       chatService
         .createConversationForBooking(booking.id, clientId)
-        .then(() => {
-          // After conversation is created, add a system message about the booking creation
-          return chatService.createSystemMessageForBookingStatus(
-            booking.id,
-            'pending',
-            property.title
-          );
-        })
+        .then(() =>
+          chatService.createSystemMessageForBookingStatus(booking.id, 'pending', property.title)
+        )
         .catch((error) => {
           logger.warn('Failed to auto-create conversation or system message for booking', {
             bookingId: booking.id,
             error: error.message,
           });
         });
+
+      // Notify property owner of new booking request (fire-and-forget)
+      fcmService
+        .sendToUser(property.owner_id, {
+          title: 'Nouvelle demande de réservation',
+          body: `Une nouvelle demande pour "${property.title}"`,
+          data: { type: 'booking_request', bookingId: booking.id },
+        })
+        .catch(() => {});
 
       return booking;
     } catch (error: any) {
@@ -245,7 +249,7 @@ export class BookingService extends SupabaseService {
             .single()
       );
 
-      // Create system message in conversation for status change
+      // System message in conversation (fire-and-forget)
       chatService
         .createSystemMessageForBookingStatus(id, input.status, property.title)
         .catch((error) => {
@@ -255,6 +259,27 @@ export class BookingService extends SupabaseService {
             error: error.message,
           });
         });
+
+      // Notify client of status change (fire-and-forget)
+      const pushTitles: Record<string, string> = {
+        accepted: 'Réservation acceptée',
+        declined: 'Réservation refusée',
+        cancelled: 'Réservation annulée',
+      };
+      const pushBodies: Record<string, string> = {
+        accepted: `Votre réservation pour "${property.title}" a été acceptée`,
+        declined: `Votre réservation pour "${property.title}" a été refusée`,
+        cancelled: `Votre réservation pour "${property.title}" a été annulée`,
+      };
+      if (pushTitles[input.status]) {
+        fcmService
+          .sendToUser(booking.client_id, {
+            title: pushTitles[input.status],
+            body: pushBodies[input.status],
+            data: { type: `booking_${input.status}`, bookingId: id },
+          })
+          .catch(() => {});
+      }
 
       return updatedBooking;
     } catch (error: any) {
@@ -340,7 +365,7 @@ export class BookingService extends SupabaseService {
             .eq('id', id)
       );
 
-      // Create system message in conversation for cancellation
+      // System message in conversation (fire-and-forget)
       chatService
         .createSystemMessageForBookingStatus(id, 'cancelled', property.title)
         .catch((error) => {
@@ -349,6 +374,17 @@ export class BookingService extends SupabaseService {
             error: error.message,
           });
         });
+
+      // Notify the other party of cancellation (fire-and-forget)
+      const recipientId =
+        userRole === 'client' ? property.owner_id : booking.client_id;
+      fcmService
+        .sendToUser(recipientId, {
+          title: 'Réservation annulée',
+          body: `Une réservation pour "${property.title}" a été annulée`,
+          data: { type: 'booking_cancelled', bookingId: id },
+        })
+        .catch(() => {});
     } catch (error: any) {
       if (error instanceof NotFoundException || error instanceof ValidationException || error instanceof BusinessRuleException) {
         throw error;
