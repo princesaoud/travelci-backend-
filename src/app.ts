@@ -17,6 +17,8 @@ import bookingRoutes from './routes/booking.routes';
 import imageRoutes from './routes/image.routes';
 import chatRoutes, { messageRouter } from './routes/chat.routes';
 import devicesRoutes from './routes/devices.routes';
+import favoriteRoutes from './routes/favorite.routes';
+import reviewRoutes from './routes/review.routes';
 
 /**
  * Create Express app
@@ -199,6 +201,8 @@ app.get('/', (_req, res): void => {
       images: '/api/images',
       conversations: '/api/conversations',
       messages: '/api/messages',
+      favorites: '/api/favorites',
+      reviews: '/api/reviews',
     },
   });
 });
@@ -247,6 +251,8 @@ app.use('/api/images', checkEnvMiddleware, imageUploadLimiter, imageRoutes);
 app.use('/api/conversations', checkEnvMiddleware, generalLimiter, chatRoutes);
 app.use('/api/messages', checkEnvMiddleware, generalLimiter, messageRouter);
 app.use('/api/devices', checkEnvMiddleware, generalLimiter, devicesRoutes);
+app.use('/api/favorites', checkEnvMiddleware, generalLimiter, favoriteRoutes);
+app.use('/api/reviews', checkEnvMiddleware, generalLimiter, reviewRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
