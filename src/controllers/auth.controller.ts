@@ -119,6 +119,59 @@ export const getMe = async (
 };
 
 /**
+ * Update the authenticated user's profile.
+ * Supports multipart (optional `avatar` image file) plus `full_name` / `phone` fields.
+ */
+export const updateMe = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendError(res, 'Non authentifié', 'UNAUTHORIZED', 401);
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, string>;
+    const update: { full_name?: string; phone?: string; avatar_url?: string } = {};
+
+    if (typeof body.full_name === 'string' && body.full_name.trim().length > 0) {
+      update.full_name = body.full_name.trim();
+    }
+    if (typeof body.phone === 'string') {
+      update.phone = body.phone.trim() || undefined;
+    }
+
+    // Optional avatar upload (field name: "avatar")
+    const file = (req.file as Express.Multer.File | undefined) ??
+      ((req.files as { avatar?: Express.Multer.File[] } | undefined)?.avatar?.[0]);
+    if (file?.buffer) {
+      update.avatar_url = await imageService.uploadAvatar(req.user.userId, file.buffer);
+    }
+
+    if (Object.keys(update).length === 0) {
+      sendError(res, 'Aucune modification fournie', 'VALIDATION_ERROR', 400);
+      return;
+    }
+
+    const user = await authService.updateUserProfile(req.user.userId, update);
+    sendSuccess(res, { user }, 'Profil mis à jour avec succès');
+  } catch (error: any) {
+    if (
+      error instanceof NotFoundException ||
+      error instanceof ValidationException ||
+      error instanceof BusinessRuleException
+    ) {
+      sendError(res, error.message, error.code, error.statusCode);
+      return;
+    }
+    logger.error('Update me controller error', { error: error.message });
+    next(error);
+  }
+};
+
+/**
  * Logout user
  */
 export const logout = async (

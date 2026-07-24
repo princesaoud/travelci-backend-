@@ -221,6 +221,7 @@ export class AuthService extends SupabaseService {
       if (input.full_name !== undefined) updateData.full_name = input.full_name;
       if (input.phone !== undefined) updateData.phone = input.phone;
       if (input.is_verified !== undefined) updateData.is_verified = input.is_verified;
+      if (input.avatar_url !== undefined) updateData.avatar_url = input.avatar_url;
       if (input.national_id_front_url !== undefined) updateData.national_id_front_url = input.national_id_front_url;
       if (input.national_id_back_url !== undefined) updateData.national_id_back_url = input.national_id_back_url;
 
