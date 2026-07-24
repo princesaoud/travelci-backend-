@@ -126,6 +126,27 @@ export class ImageService {
   }
 
   /**
+   * Upload a user profile photo (avatar). Square-cropped and optimized.
+   */
+  async uploadAvatar(userId: string, file: Buffer): Promise<string> {
+    try {
+      const optimized = await sharp(file)
+        .resize(512, 512, { fit: 'cover', withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
+      // Timestamp so the public URL changes on each upload (busts CDN/image cache).
+      const path = `${userId}/${Date.now()}.webp`;
+      return await this.uploadToBucket(optimized, 'avatars', path, 'image/webp');
+    } catch (error: any) {
+      logger.error('Avatar upload error', { error: error.message, userId });
+      throw new InfrastructureException(
+        `Erreur lors du téléchargement de la photo de profil: ${error.message}`,
+        error
+      );
+    }
+  }
+
+  /**
    * Upload and optimize image with multiple sizes
    */
   async uploadAndOptimize(file: Buffer, propertyId: string): Promise<OptimizedImages> {

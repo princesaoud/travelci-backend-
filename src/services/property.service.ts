@@ -189,11 +189,21 @@ export class PropertyService extends SupabaseService {
         await imageService.deleteImages(property.image_urls);
       }
 
-      // Delete property
-      await this.executeQuery(
-        async () =>
-          await this.client.from('properties').delete().eq('id', id)
-      );
+      // Delete property.
+      // NOTE: a Supabase .delete() without .select() resolves to { data: null, error: null }
+      // on success. executeQuery() treats null data as a failure, so we check the error
+      // directly here — otherwise a successful delete would be reported as an error.
+      const { error: deleteError } = await this.client
+        .from('properties')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        throw new InfrastructureException(
+          `Erreur lors de la suppression de la propriété: ${deleteError.message}`,
+          deleteError
+        );
+      }
 
       // Invalidate cache
       await cacheService.invalidatePropertyCache(id);

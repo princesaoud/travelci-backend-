@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { body } from 'express-validator';
-import { register, login, getMe, logout } from '../controllers/auth.controller';
+import { register, login, getMe, updateMe, logout } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validation.middleware';
 
@@ -18,6 +18,15 @@ const registerUpload = multer({
   { name: 'national_id_front', maxCount: 1 },
   { name: 'national_id_back', maxCount: 1 },
 ]);
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Seules les images sont autorisées pour la photo de profil'));
+  },
+}).single('avatar');
 
 /**
  * @swagger
@@ -194,6 +203,50 @@ router.post(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/me', authenticate, getMe);
+
+/**
+ * @swagger
+ * /api/auth/me:
+ *   patch:
+ *     summary: Mettre à jour le profil de l'utilisateur connecté
+ *     description: Met à jour le nom complet, le téléphone et/ou la photo de profil (avatar)
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               full_name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Profil mis à jour avec succès
+ *       401:
+ *         description: Non authentifié
+ */
+router.patch(
+  '/me',
+  authenticate,
+  (req, res, next) => {
+    if (req.is('multipart/form-data')) {
+      avatarUpload(req, res, (err) => {
+        if (err) next(err);
+        else next();
+      });
+    } else {
+      next();
+    }
+  },
+  updateMe
+);
 
 /**
  * @swagger
